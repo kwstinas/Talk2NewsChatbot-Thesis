@@ -1,3 +1,4 @@
 *.gguf
 *.pack
 models/
+venv/
