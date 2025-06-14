@@ -2,3 +2,4 @@
 *.pack
 models/
 venv/
+*.pyc
