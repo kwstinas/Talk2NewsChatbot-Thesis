@@ -2,5 +2,5 @@
 *.pack
 models/
 venv/
-*.pyc*.gguf
-*.pack
+*.pyc
+
