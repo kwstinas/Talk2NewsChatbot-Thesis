@@ -2,6 +2,8 @@ Talk2News Chatbot-Thesis
 
 
 Overview
+
+
 Talk2News Chatbot is a news chatbot designed to answer user questions related to current news articles. This project is based on Retrieval-Augmented Generation (RAG) architecture, which utilizes pre-trained machine learning models and information retrieval techniques to provide accurate, up-to-date answers. The chatbot gathers news articles from various sources, stores them in a database, and then leverages a powerful language model to generate answers based on those articles.
 
 Objective
