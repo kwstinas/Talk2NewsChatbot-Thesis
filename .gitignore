@@ -1,5 +1,37 @@
+# Large files
 *.gguf
 *.pack
+*.bin
+*.h5
+*.pt
+*.pth
+*.tar
+*.gz
+*.zip
+*.7z
+*.rar
+*.dat
+*.pkl
+*.joblib
+*.npy
+*.npz
+
+# Folders
 models/
 venv/
+data/
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Python
 *.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so

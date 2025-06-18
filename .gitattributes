@@ -1,4 +1,8 @@
+# Git LFS για μεγάλες αρχεία που θέλουμε να παρακολουθούμε
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
+# Δεν παρακολουθούμε τα .gguf και .pack με το Git LFS
 *.gguf -filter
 *.pack -filter
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
