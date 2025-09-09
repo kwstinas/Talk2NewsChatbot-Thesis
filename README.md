@@ -56,3 +56,11 @@ The system crawls news articles from multiple Greek and international sources, s
 │
 ▼
 [User Interface]
+
+##  Next Steps
+
+While the current version of the project is fully functional, there are several improvements planned:
+
+- Develop a simple **frontend interface** (React-based chatbot) for easier user interaction.  
+- Optimize **retrieval and ranking** for even more accurate answers. 
+- Improve the **LLM integration** for more concise and factual responses.
