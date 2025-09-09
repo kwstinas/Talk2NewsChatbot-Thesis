@@ -9,3 +9,6 @@ feedparser==6.0.10
 sentence-transformers>=2.6.0
 langchain==0.0.133
 faiss-cpu
+beautifulsoup4
+lxml
+python-dateutil

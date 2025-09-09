@@ -1,4 +1,21 @@
-# Large files
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+__pycache__/
+
+# Virtual environments
+venv/
+.env
+.env.*
+
+# Build / dist
+build/
+dist/
+
+# Large / Binary files
 *.gguf
 *.pack
 *.bin
@@ -16,22 +33,24 @@
 *.npy
 *.npz
 
-# Folders
+# Project-specific folders
 models/
-venv/
 data/
-__pycache__/
-*.egg-info/
-build/
-dist/
+faiss_index/
+logs/
+*.log
 
-# IDE
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+*.bson
+*.wt
+*.ns
+mongod.lock
+dump.rdb
+
+# IDE / Editors
+
 .vscode/
 .idea/
-
-# Python
-*.pyc
-*.pyo
-*.pyd
-__pycache__/
-*.so
