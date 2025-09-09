@@ -33,15 +33,26 @@ The system crawls news articles from multiple Greek and international sources, s
   - Interactive script (`ask_chatbot.py`) for quick local testing without the API.
 
 ---
-
-##  Architecture
-
-```mermaid
-flowchart TD
-    A[RSS/Web Sources] --> B[Crawler (feedparser)]
-    B --> C[(MongoDB)]
-    C --> D[Build Vectorstore (FAISS + HuggingFace Embeddings)]
-    D --> E[RAG Pipeline]
-    E --> F[Llama 3.1 via llama.cpp]
-    F --> G[FastAPI Backend / CLI]
-    G --> H[User]
+## Architecture
+[Web Sources / RSS Feeds]
+│
+▼
+[Crawler - feedparser]
+│
+▼
+[MongoDB Database]
+│
+▼
+[Vectorstore - FAISS + HuggingFace Embeddings]
+│
+▼
+[RAG Pipeline]
+│
+▼
+[LLM - Llama 3.1 (via llama.cpp)]
+│
+▼
+[FastAPI Backend / CLI Tool]
+│
+▼
+[User Interface]
