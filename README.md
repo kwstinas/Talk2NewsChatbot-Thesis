@@ -62,7 +62,6 @@ The system crawls news articles from multiple Greek and international sources, s
 While the current version of the project is fully functional, there are several improvements planned:
 
 - Develop a simple **frontend interface** (React-based chatbot) for easier user interaction.  
-- Optimize **retrieval and ranking** for even more accurate answers. 
 - Improve the **LLM integration** for more concise and factual responses.
 - Improved retrieval pipeline: Use Pandas for lightweight pre-filtering of articles (by recency, length, and duplicates) before FAISS similarity search.
 - Deployment: Containerize the application (Docker) for easy setup and sharing, and prepare a lightweight demo version.
