@@ -1,67 +1,52 @@
-# Talk2News Chatbot
+# 📰 Talk2News Chatbot
 
-A news-oriented chatbot built as part of an academic thesis project.  
-The system crawls news articles from multiple Greek and international sources, stores them in MongoDB, and enables users to query the data conversationally through a Retrieval-Augmented Generation (RAG) pipeline powered by Llama 3.1.
+**Talk2News** is an interactive chatbot that provides fresh, reliable answers based on recent news articles.  
+It is built as part of a final-year thesis, focusing on **Retrieval-Augmented Generation (RAG)** with local LLM inference.
+
+The system fetches articles from multiple news sources, indexes them into a vector store, and answers user questions strictly based on the **most relevant and recent article**.
 
 ---
 
-##  Features
+##  Features Implemented
 
-- **Automated Web Crawling**
-  - Scheduled crawling from a curated list of news websites (Greek & international).
-  - Extraction of full article content, titles, categories, and publication dates.
-  - Duplicate detection and incremental updates to avoid redundant data.
+- **Web Crawling & RSS Feeds**
+  - Automated crawler fetches articles from multiple news sites.
+  - Metadata extraction (title, date, category, author).
 
-- **Vector Search & RAG**
-  - Article embeddings generated using `sentence-transformers/all-MiniLM-L6-v2`.
-  - FAISS vectorstore for fast semantic search.
-  - Hybrid ranking (similarity + recency + keyword/topic boost + BM25 reranking).
-  - Ensures responses are based on a single, recent, and relevant article.
+- **Database**
+  - MongoDB for storing full articles with metadata.
+  - Duplicate detection using hash keys.
+
+- **Vector Store & Retrieval**
+  - HuggingFace embeddings (`all-mpnet-base-v2`).
+  - FAISS vector index for similarity search.
+  - Hybrid retrieval: similarity + recency boost + BM25 re-ranking.
+  - Selection of a **single best article** per query.
 
 - **LLM Integration**
-  - Runs locally with [llama.cpp](https://github.com/ggerganov/llama.cpp).
-  - Configured with **Llama 3.1 8B Instruct (Q5_K_M quantization)**.
-  - Strict system prompts enforce concise, factual answers drawn only from retrieved content.
-  - Supports both English and Greek queries.
+  - Local inference with **LLaMA 3** (quantized GGUF).
+  - Prompting designed to return **concise, fact-based answers**.
+  - Extractive snippet mechanism when available.
 
-- **Backend**
-  - FastAPI application serving REST endpoints.
-  - APScheduler for automated hourly crawling.
-  - Clear modular structure (`crawler`, `chatbot`, `api`).
-
-- **CLI Demo**
-  - Interactive script (`ask_chatbot.py`) for quick local testing without the API.
+- **Frontend**
+  - React-based chat interface (served without build tools, via Babel & CDN).
+  - Custom **logo and branding**.
+  - Persistent chat history (localStorage).
 
 ---
-## Architecture
-[Web Sources / RSS Feeds]
-│
-▼
-[Crawler - feedparser]
-│
-▼
-[MongoDB Database]
-│
-▼
-[Vectorstore - FAISS + HuggingFace Embeddings]
-│
-▼
-[RAG Pipeline]
-│
-▼
-[LLM - Llama 3.1 (via llama.cpp)]
-│
-▼
-[FastAPI Backend / CLI Tool]
-│
-▼
-[User Interface]
 
-##  Next Steps
-
-While the current version of the project is fully functional, there are several improvements planned:
-
-- Develop a simple **frontend interface** (React-based chatbot) for easier user interaction.  
-- Improve the **LLM integration** for more concise and factual responses.
-- Improved retrieval pipeline: Use Pandas for lightweight pre-filtering of articles (by recency, length, and duplicates) before FAISS similarity search.
-- Deployment: Containerize the application (Docker) for easy setup and sharing, and prepare a lightweight demo version.
+##  Project Structure
+Talk2News-Chatbot/
+├── backend/
+│ ├── app/
+│ │ ├── main.py # FastAPI backend (API endpoints)
+│ │ ├── chatbot/ # RAG pipeline: llm, prompts, vectorstore
+│ │ └── crawler/ # News crawler (RSS parsing, storage in MongoDB)
+│ └── requirements.txt
+├── frontend/
+│ ├── index.html # Entry point (React app)
+│ ├── style.css # Styling 
+│ ├── app.jsx # Chat UI logic
+│ └── assets/
+│ └── Talk2News.png # Chatbot logo
+└── README.md
