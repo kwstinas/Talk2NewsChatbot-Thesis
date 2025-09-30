@@ -1,6 +1,7 @@
 # 📰 Talk2News Chatbot
 
 **Talk2News** is an interactive chatbot that provides fresh, reliable answers based on recent news articles.  
+It combines **web crawling, semantic search, and local LLM inference (LLaMA 3)** to deliver up-to-date, contextual responses.
 It is built as part of a final-year thesis, focusing on **Retrieval-Augmented Generation (RAG)** with local LLM inference.
 
 The system fetches articles from multiple news sources, indexes them into a vector store, and answers user questions strictly based on the **most relevant and recent article**.
@@ -35,18 +36,49 @@ The system fetches articles from multiple news sources, indexes them into a vect
 
 ---
 
-##  Project Structure
+## Project Structure
 Talk2News-Chatbot/
-├── backend/
+│
+├── backend/ # FastAPI backend (RAG pipeline)
 │ ├── app/
-│ │ ├── main.py # FastAPI backend (API endpoints)
-│ │ ├── chatbot/ # RAG pipeline: llm, prompts, vectorstore
-│ │ └── crawler/ # News crawler (RSS parsing, storage in MongoDB)
-│ └── requirements.txt
-├── frontend/
-│ ├── index.html # Entry point (React app)
-│ ├── style.css # Styling 
-│ ├── app.jsx # Chat UI logic
+│ │ ├── main.py # FastAPI entrypoint & API routes
+│ │ │
+│ │ ├── crawler/ # Crawling & data collection
+│ │ │ └── crawler.py
+│ │ │
+│ │ ├── chatbot/ # RAG logic & LLM inference
+│ │ │ ├── build_vectorstore.py
+│ │ │ ├── vectorstore.py
+│ │ │ ├── llm.py
+│ │ │ ├── rag.py
+│ │ │ └── prompts.py
+│ │ │
+│ │ └── ...
+│ │
+│ └── requirements.txt # Python dependencies
+│
+├── frontend/ # React UI (served via Babel CDN)
+│ ├── index.html # HTML entrypoint
+│ ├── style.css # Styling (dark theme)
+│ ├── app.jsx # React app logic (chat UI)
 │ └── assets/
 │ └── Talk2News.png # Chatbot logo
+│
 └── README.md
+## Tech Stack
+
+  Backend: Python, FastAPI, MongoDB
+
+  Retrieval: FAISS, BM25 re-ranking
+
+  Embeddings: HuggingFace all-mpnet-base-v2
+
+  LLM: LLaMA 3 (GGUF, via llama-cpp-python)
+
+  Frontend: React (served via Babel, no build step)
+
+  ## Author
+
+  Dimitris Kostinas
+  Final-year Computer Science thesis project.
+  Focus areas: RAG pipelines, LLM integration and Web Crawling.
