@@ -36,35 +36,6 @@ The system fetches articles from multiple news sources, indexes them into a vect
 
 ---
 
-## Project Structure
-Talk2News-Chatbot/
-│
-├── backend/ # FastAPI backend (RAG pipeline)
-│ ├── app/
-│ │ ├── main.py # FastAPI entrypoint & API routes
-│ │ │
-│ │ ├── crawler/ # Crawling & data collection
-│ │ │ └── crawler.py
-│ │ │
-│ │ ├── chatbot/ # RAG logic & LLM inference
-│ │ │ ├── build_vectorstore.py
-│ │ │ ├── vectorstore.py
-│ │ │ ├── llm.py
-│ │ │ ├── rag.py
-│ │ │ └── prompts.py
-│ │ │
-│ │ └── ...
-│ │
-│ └── requirements.txt # Python dependencies
-│
-├── frontend/ # React UI (served via Babel CDN)
-│ ├── index.html # HTML entrypoint
-│ ├── style.css # Styling (dark theme)
-│ ├── app.jsx # React app logic (chat UI)
-│ └── assets/
-│ └── Talk2News.png # Chatbot logo
-│
-└── README.md
 ## Tech Stack
 
   Backend: Python, FastAPI, MongoDB
