@@ -2,26 +2,22 @@
 import os
 import json
 import logging
-
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
+from ..utils_text import clean_html  
 
-from ..utils_text import clean_html  # ίδιο import βάθος με τα υπόλοιπα modules
-
-# ===== Ρυθμίσεις / Defaults (ίδιες ονομασίες περιβάλλοντος) =====
-SAVE_PATH = os.getenv("FAISS_PATH", "faiss_index")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+SAVE_PATH = "faiss_index"
+EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Κρατάμε ένα απλό cache όπως πριν (προαιρετικό, βοηθά στις κλήσεις)
 _vectorstore_cache = None
 _embeddings_cache = None
 
 
 def _get_embeddings():
-    """Επιστρέφει embeddings instance με το επιλεγμένο μοντέλο."""
+    """Επιστρέφει embeddings instance."""
     global _embeddings_cache
     if _embeddings_cache is None:
         _embeddings_cache = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
@@ -63,7 +59,6 @@ def load_vectorstore():
         vs = FAISS.load_local(SAVE_PATH, embeddings, allow_dangerous_deserialization=True)
         _vectorstore_cache = vs
         logger.info("Το vectorstore φορτώθηκε επιτυχώς!")
-        # Μένω πιστός και στο print που είχες για “Το vectorstore φορτώθηκε επιτυχώς!”
         print("Το vectorstore φορτώθηκε επιτυχώς!")
         return vs
     except Exception as e:
@@ -80,25 +75,25 @@ def similarity_search(query: str, k: int = 5):
     if not vs:
         return []
 
-    # 1) Ασφαλής απολύμανση UTF-8 (κόβει surrogates/χαλασμένα bytes)
+    # Ασφαλής απολύμανση UTF-8 (κόβει surrogates/χαλασμένα bytes)
     if not isinstance(query, str):
         query = str(query or "")
     query = query.encode("utf-8", "ignore").decode("utf-8", "ignore")
 
-    # 2) Καθαρισμός HTML + trimming
+    # Καθαρισμός HTML + trimming
     try:
         query_clean = clean_html(query).strip()
-    except Exception as e:
-        # Αν κολλήσει το BeautifulSoup με περίεργο input, σώζουμε την κατάσταση
+    except Exception:
+        # Αν κολλήσει το BeautifulSoup με περίεργο input
         logging.exception("clean_html failed on query")
         query_clean = (query or "").strip()
 
-    # 3) Απλός κόφτης θορύβου / κενών
+    # Απλός κόφτης θορύβου / κενών
     if not query_clean or len(query_clean) < 2:
         logging.warning("similarity_search: άδειο ή πολύ μικρό query μετά τον καθαρισμό.")
         return []
 
-    # 4) Προληπτικό κόψιμο υπερβολικά μεγάλων queries (πχ paste dump)
+    # Προληπτικό κόψιμο υπερβολικά μεγάλων queries (πχ paste dump)
     if len(query_clean) > 512:
         query_clean = query_clean[:512]
 
@@ -106,7 +101,7 @@ def similarity_search(query: str, k: int = 5):
 
     try:
         return vs.similarity_search_with_score(query_clean, k=k)
-    except Exception as e:
+    except Exception:
         # Δείξε πλήρες traceback για να βρούμε ρίζα (αντί για κενό μήνυμα)
         logger.exception("Σφάλμα στο similarity search")
         return []

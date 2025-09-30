@@ -14,7 +14,7 @@ async def read_root():
 
 class Question(BaseModel):
     question: str
-    category: str = None  # Προαιρετική κατηγορία
+    category: str = None  
 
 
 @router.post("/ask")

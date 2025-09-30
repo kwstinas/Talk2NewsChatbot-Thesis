@@ -49,7 +49,7 @@ _client = MongoClient(MONGO_URL)
 _db = _client[DB_NAME]
 collection = _db[COLL_NAME]
 
-# Δημιουργία βασικών index (idempotent)
+# Δημιουργία βασικών index 
 try:
     collection.create_index([("link", ASCENDING)], unique=True, name="uniq_link")
     collection.create_index([("hash", ASCENDING)], name="idx_hash")
@@ -100,7 +100,7 @@ def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> None:
     Διατρέχει όλα τα FEEDS, καθαρίζει περιεχόμενο/ημερομηνίες και
     εισάγει/ενημερώνει άρθρα στη Mongo με dedup (link/hash).
     """
-    logger.info("🚀 Ξεκίνησε το crawling ειδήσεων...")
+    logger.info(" Ξεκίνησε το crawling ειδήσεων...")
     new_articles: List[Dict[str, Any]] = []
     inserted = updated = skipped = 0
 
@@ -169,7 +169,7 @@ def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> None:
 
     total = inserted + updated
     if total:
-        logger.info(f"📦 Ολοκληρώθηκε το crawling! Νέα/ενημερωμένα άρθρα: {total} (inserted={inserted}, updated={updated}).")
+        logger.info(f"Ολοκληρώθηκε το crawling! Νέα/ενημερωμένα άρθρα: {total} (inserted={inserted}, updated={updated}).")
     else:
         logger.warning("⚠️ Δεν βρέθηκαν νέα/ενημερωμένα άρθρα.")
 

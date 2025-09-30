@@ -6,7 +6,7 @@ from llama_cpp import Llama
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ✅ Ρύθμιση μοντέλου (μπορείς να το αλλάξεις και με env var)
+# ✅ Ρύθμιση μοντέλου 
 LLAMA_MODEL_PATH = os.getenv(
     "LLAMA_MODEL_PATH",
     "/home/kwstinas/Projects/Talk2News-Chatbot/models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf",
@@ -15,7 +15,7 @@ LLAMA_MODEL_PATH = os.getenv(
 # ✅ Ρυθμίσεις φόρτωσης
 LLAMA_N_CTX = int(os.getenv("LLAMA_N_CTX", "4096"))
 LLAMA_N_GPU_LAYERS = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))  # 0 = CPU
-LLAMA_CHAT_FORMAT = os.getenv("LLAMA_CHAT_FORMAT", "llama-3")   # ΑΠΑΡΑΙΤΗΤΟ για Llama 3.x
+LLAMA_CHAT_FORMAT = os.getenv("LLAMA_CHAT_FORMAT", "llama-3")   
 
 _llm = None  # global cache
 
@@ -35,7 +35,7 @@ def load_llm():
             model_path=LLAMA_MODEL_PATH,
             n_ctx=LLAMA_N_CTX,
             n_gpu_layers=LLAMA_N_GPU_LAYERS,
-            chat_format=LLAMA_CHAT_FORMAT,  # ✅ κρίσιμο για σταθερές απαντήσεις
+            chat_format=LLAMA_CHAT_FORMAT,  
             f16_kv=True,
         )
         logger.info(

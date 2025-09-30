@@ -9,15 +9,12 @@ import os
 import re as _re_tok
 from time import perf_counter
 from dotenv import load_dotenv
-from .vectorstore import load_vectorstore, similarity_search  # similarity_search επιστρέφει [(doc, raw_score), ...]
+from .vectorstore import load_vectorstore, similarity_search  
 from .llm import load_llm, generate_answer
 from rank_bm25 import BM25Okapi
-
-# --- ΝΕΑ imports για extractive snippets ---
 import regex as re2
 import numpy as np
 from langchain_huggingface import HuggingFaceEmbeddings
-# -------------------------------------------
 
 # Φόρτωση .env (ώστε τα flags να διαβάζονται σωστά)
 load_dotenv()
@@ -28,7 +25,7 @@ EXTRACTIVE_ENABLED  = os.getenv("EXTRACTIVE_ENABLED", "true").lower() == "true"
 SNIPPETS_K          = int(os.getenv("SNIPPETS_K", "5"))
 SNIPPETS_MIN_SIM    = float(os.getenv("SNIPPETS_MIN_SIM", "0.15"))
 
-# Προαιρετικό (βαρύτερο): cross-encoder re-rank (δεν χρησιμοποιείται εδώ ακόμη)
+# cross-encoder re-rank 
 CROSS_ENCODER_ENABLED = os.getenv("CROSS_ENCODER_ENABLED", "false").lower() == "true"
 CROSS_ENCODER_MODEL   = os.getenv("CROSS_ENCODER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
@@ -59,10 +56,10 @@ def _bm25_rerank(hits_with_raw, query: str, top_m: int = 10):
 # Ρύθμιση καταγραφής σφαλμάτων
 logging.basicConfig(level=logging.INFO)
 
-# 🔹 Φόρτωση vectorstore στο startup (ίδιο όπως πριν)
+# 🔹 Φόρτωση vectorstore στο startup
 vectorstore = load_vectorstore()
 
-# 🔹 Lazy-loading του LLM (ίδιο όπως πριν)
+# 🔹 Lazy-loading του LLM
 llm_instance = None
 def get_llm():
     global llm_instance
@@ -70,10 +67,8 @@ def get_llm():
         llm_instance = load_llm()
     return llm_instance
 
-
-# =========================
 # Topic helpers
-# =========================
+
 TOPIC_KEYWORDS = {
     "ai": ["ai", "artificial intelligence", "machine learning", "neural", "open-source ai", "τεχνητή νοημοσύνη"],
     "politics": ["politics", "political", "policy", "minister", "government", "βουλή", "πολιτική", "κόμμα"],
@@ -97,7 +92,7 @@ def _text_contains_any(text: str, kws) -> bool:
     return any(k in tl for k in kws)
 
 
-# (ΔΙΑΤΗΡΕΙΤΑΙ για μελλοντική χρήση)
+
 def filter_recent_documents(documents, days=30, desired_category=None):
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
     filtered_docs = []
@@ -123,14 +118,12 @@ def filter_recent_documents(documents, days=30, desired_category=None):
     logging.info(f"🧪 Νέα φίλτρα άρθρων: {len(filtered_docs)} / {len(documents)}")
     return filtered_docs
 
-
-# =========================
 # Scoring params & helpers
-# =========================
+
 MAX_AGE_DAYS = 45
 RECENCY_WEIGHT = 0.25   # 25% επίδραση φρεσκάδας
 TAU_DAYS = 15.0         # εκθετική αποσύνθεση (όσο μικρότερο, τόσο «τιμωρεί» τα παλιά)
-MIN_SIM = 0.20          # κατώφλι ομοιότητας (μετά τον μετασχηματισμό)
+MIN_SIM = 0.15          # κατώφλι ομοιότητας (μετά τον μετασχηματισμό)
 MIN_LEN = 300           # ελάχιστο καθαρό μήκος κειμένου
 
 def _to_utc(dt_str):
@@ -170,28 +163,37 @@ def _final_score(similarity: float, published_iso: str) -> float:
     return similarity * (1.0 - RECENCY_WEIGHT) + RECENCY_WEIGHT * r
 
 
-def _select_single_article(hits_with_raw, query_kws=None):
+def _select_single_article(hits_with_raw, query_kws=None, *, hard_recency=True, min_sim=MIN_SIM):
     """
     hits_with_raw: λίστα από tuples (doc, raw_score)
     -> επιστρέφει (doc, topic_match: bool) ή (None, False)
+
+    hard_recency=True  => κόβει τελείως άρθρα > MAX_AGE_DAYS
+    hard_recency=False => δεν κόβει παλιά· απλώς τα σκοράρει χαμηλότερα
     """
     query_kws = query_kws or []
     candidates = []
+
     for doc, raw in hits_with_raw:
         sim = _distance_to_similarity(raw)
-        if sim < MIN_SIM:
+        if sim < min_sim:
             continue
+
         text = (doc.page_content or "").strip()
         if len(text) < MIN_LEN:
             continue
+
         pub = doc.metadata.get("published_date")
-        if _recency_boost(pub) == 0.0:
+
+        # σε strict mode κόβουμε ό,τι είναι εκτός παραθύρου
+        if hard_recency and _recency_boost(pub) == 0.0:
             continue
 
         # topic match: τουλάχιστον ένα keyword μέσα στο title+content
         topic_match = _text_contains_any(f"{doc.metadata.get('title','')} {text}", query_kws)
 
-        score = _final_score(sim, pub) + (0.03 if topic_match and query_kws else 0.0)  # μικρό bonus αν ταιριάζει
+        # score: similarity + recency boost 
+        score = _final_score(sim, pub) + (0.03 if topic_match and query_kws else 0.0)
         candidates.append((score, doc, sim, pub, topic_match))
 
     if not candidates:
@@ -207,14 +209,14 @@ def _select_single_article(hits_with_raw, query_kws=None):
     return best_doc, best_match
 
 
-# =========================
-# Extractive snippets helpers (ΝΕΑ)
-# =========================
+# Extractive snippets helpers 
+
 _embedder = None
 def _get_embedder():
     global _embedder
     if _embedder is None:
-        _embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # ⚠️ ΣΥΜΦΩΝΙΑ ΜΕ ΤΟ FAISS: χρησιμοποιούμε το ίδιο embedding model (all-mpnet-base-v2)
+        _embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
     return _embedder
 
 # απλός splitter που δουλεύει en/el (., ?, !, ελληνική άνω τελεία '·', ellipsis …)
@@ -301,6 +303,7 @@ Excerpt:
 {content}
 \"\"\"
 
+
 [USER QUESTION]
 {user_query}
 
@@ -330,6 +333,7 @@ topic_match={str(topic_match).lower()}
 \"\"\"
 {content}
 \"\"\"
+
 
 [ΕΡΩΤΗΣΗ ΧΡΗΣΤΗ]
 {user_query}
@@ -366,6 +370,7 @@ RULES:
 {joined}
 \"\"\"
 
+
 [USER QUESTION]
 {user_query}
 """.strip()
@@ -388,12 +393,13 @@ RULES:
 {joined}
 \"\"\"
 
+
 [ΕΡΩΤΗΣΗ]
 {user_query}
 """.strip()
 
 
-# 🔹 Βασική RAG λειτουργία (ΔΙΑΤΗΡΕΙΤΑΙ ΟΝΟΜΑ & ΥΠΟΓΡΑΦΗ)
+# 🔹 Βασική RAG λειτουργία 
 def generate_contextual_answer(user_query, category: str = None):
     import re
     user_query = str(user_query).strip()
@@ -410,7 +416,7 @@ def generate_contextual_answer(user_query, category: str = None):
         if vectorstore is None:
             return "Σφάλμα: Το vectorstore δεν είναι διαθέσιμο."
 
-        # 1) Similarity search ΜΕ score (παίρνουμε tuples) — αυξημένο k για καλύτερο recall
+        # Similarity search με score 
         t0 = perf_counter()
         hits_with_raw = similarity_search(user_query, k=40)
         t_faiss = (perf_counter() - t0) * 1000.0
@@ -418,7 +424,7 @@ def generate_contextual_answer(user_query, category: str = None):
         if not hits_with_raw:
             return _fallback_no_context(user_query)
 
-        # 1.5) Keyword boost (ήπιο) βάσει του query
+        # Keyword boost  βάσει του query
         query_kws = _keywords_for_query(user_query)
         if query_kws:
             boosted = []
@@ -429,7 +435,7 @@ def generate_contextual_answer(user_query, category: str = None):
                 boosted.append((doc, new_raw))
             hits_with_raw = boosted
 
-        # 2) Category boost (ήπιο) βάσει category param
+        # Category boost βάσει category param
         if category:
             cat = category.lower().strip()
             boosted = []
@@ -440,7 +446,7 @@ def generate_contextual_answer(user_query, category: str = None):
                 boosted.append((doc, new_raw))
             hits_with_raw = boosted
 
-        # 2.5) BM25 re-rank (μόνο αν είναι ενεργό το flag)
+        # BM25 re-rank (μόνο αν είναι ενεργό το flag)
         if RERANK_BM25_ENABLED:
             t1 = perf_counter()
             hits_with_raw = _bm25_rerank(hits_with_raw, user_query, top_m=10)
@@ -448,12 +454,33 @@ def generate_contextual_answer(user_query, category: str = None):
         else:
             t_bm25 = 0.0
 
-        # 3) Επιλογή ΕΝΟΣ άρθρου με thresholds + recency + topic flag
-        chosen, topic_match = _select_single_article(hits_with_raw, query_kws=query_kws)
+        # Επιλογή ενός άρθρου:
+        # strict pass: σεβόμαστε recency window και κατώφλι MIN_SIM
+        chosen, topic_match = _select_single_article(
+            hits_with_raw,
+            query_kws=query_kws,
+            hard_recency=True,
+            min_sim=MIN_SIM
+        )
+
+        # relaxed pass: αν δεν βρεθεί τίποτα, επέτρεψε παλιά άρθρα & χαμήλωσε λίγο το min_sim
+        if not chosen:
+            chosen, topic_match = _select_single_article(
+                hits_with_raw,
+                query_kws=query_kws,
+                hard_recency=False,   # μην κόβεις παλιά
+                min_sim=0.10          # δέξου ελαφρώς χαμηλότερη ομοιότητα
+            )
+
+        # last resort: αν ακόμα δεν υπάρχει, πάρε το πρώτο hit «ως έχει»
+        if not chosen and hits_with_raw:
+            doc0, _raw0 = hits_with_raw[0]
+            chosen, topic_match = doc0, False
+
         if not chosen:
             return _fallback_no_context(user_query)
 
-        # 4) Prompt για ΕΝΑ άρθρο — ΠΡΩΤΑ προσπαθούμε extractive snippets
+        # Prompt για ένα άρθρο — πρώτα προσπαθούμε extractive snippets
         lang = _detect_lang(user_query)
         snippets = _extractive_snippets(chosen, user_query, k=SNIPPETS_K, min_sim=SNIPPETS_MIN_SIM) if EXTRACTIVE_ENABLED else []
         if snippets:
@@ -461,7 +488,6 @@ def generate_contextual_answer(user_query, category: str = None):
         else:
             prompt = _build_prompt_one_article(user_query, chosen, lang, topic_match)
 
-        # 5) Γεννήτρια LLM
         t2 = perf_counter()
         answer = generate_answer(get_llm(), prompt)
         t_llm = (perf_counter() - t2) * 1000.0
@@ -475,14 +501,13 @@ def generate_contextual_answer(user_query, category: str = None):
         if not answer or len(answer) < 10:
             return _fallback_no_context(user_query)
 
-        # 6) Post-processing: αφαίρεση τυχόν “Topic match:” / labels
+        # Post-processing: αφαίρεση τυχόν labels
         answer = _re.sub(r'(?im)^\s*(topic\s*match\s*:.*)$', '', answer).strip()
         answer = _re.sub(
             r'(?im)^\s*(title|date\s*\(utc\)|link|source|excerpt|άρθρο|τίτλος|ημερομηνία|σύνδεσμος|απόσπασμα)\s*:\s*.*$',
             '',
             answer
         ).strip()
-        # συμπτύξεις πολλαπλών κενών γραμμών
         answer = _re.sub(r'\n{2,}', '\n', answer).strip()
 
         logging.info(f"[timings] faiss_ms={t_faiss:.1f} bm25_ms={t_bm25:.1f} llm_ms={t_llm:.1f}")
@@ -491,6 +516,7 @@ def generate_contextual_answer(user_query, category: str = None):
     except Exception as e:
         logging.exception(f"Σφάλμα κατά την επεξεργασία της ερώτησης: {str(e)}")
         return f"Σφάλμα κατά την επεξεργασία της ερώτησης: {str(e)}"
+
 
 
 def _detect_lang(q: str) -> str:

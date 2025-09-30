@@ -1,3 +1,4 @@
+# backend/app/chatbot/build_vectorstore.py
 import os
 import shutil
 import json
@@ -6,25 +7,25 @@ from pymongo import MongoClient
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# ==== Ρυθμίσεις ====
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://172.25.240.1:27017/")
-DATABASE_NAME = os.getenv("MONGO_DB", "news_database")
-COLLECTION_NAME = os.getenv("MONGO_COLL", "articles")
-SAVE_PATH = os.getenv("FAISS_PATH", "faiss_index")
+MONGO_URL = "mongodb://172.25.240.1:27017/"
+DATABASE_NAME = "news_database"
+COLLECTION_NAME = "articles"
+SAVE_PATH = "faiss_index"
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 
-# 👉 default: all-mpnet-base-v2 (μπορείς να το αλλάζεις με env)
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2")
+EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def connect_to_mongo():
     client = MongoClient(MONGO_URL)
     db = client[DATABASE_NAME]
     return db[COLLECTION_NAME]
+
 
 def load_articles():
     collection = connect_to_mongo()
@@ -33,6 +34,7 @@ def load_articles():
         raise ValueError("Δεν βρέθηκαν άρθρα στη βάση δεδομένων!")
     logger.info(f"Φορτώθηκαν {len(articles)} άρθρα.")
     return articles
+
 
 def create_chunks(articles):
     texts, metadatas = [], []
@@ -60,6 +62,7 @@ def create_chunks(articles):
                 })
     logger.info(f"Δημιουργήθηκαν {len(texts)} chunks.")
     return texts, metadatas
+
 
 def build_vectorstore():
     logger.info("Ξεκινά η διαδικασία δημιουργίας του FAISS vectorstore...")
@@ -94,6 +97,7 @@ def build_vectorstore():
 
     logger.info(f"✅ Ολοκληρώθηκε η δημιουργία FAISS vectorstore με {len(texts)} chunks!")
     logger.info(f"ℹ️ Embedding model: {EMBEDDING_MODEL} | dim={dim}")
+
 
 if __name__ == "__main__":
     build_vectorstore()
