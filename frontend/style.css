@@ -9,6 +9,23 @@
     --danger: #ff6b6b;
     --shadow: 0 10px 30px rgba(0,0,0,.35);
     --radius: 16px;
+    --chip: rgba(255,255,255,.04);
+    --chip-border: rgba(255,255,255,.08);
+  }
+  
+  /* Light theme overrides */
+  :root[data-theme="light"]{
+    --bg: #f6f8fc;
+    --panel: #ffffff;
+    --panel-2: #f3f6fb;
+    --text: #0b1220;
+    --muted: #4e5a71;
+    --accent: #3b6be7;
+    --accent-2: #36b9a5;
+    --danger: #d64242;
+    --shadow: 0 10px 30px rgba(0,0,0,.12);
+    --chip: #f6f8fc;
+    --chip-border: #e5e9f2;
   }
   
   *{ box-sizing: border-box; }
@@ -20,95 +37,62 @@
     color:var(--text);
     font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
   }
+  :root[data-theme="light"] body{
+    background: var(--bg);
+  }
   
   .container{
     max-width: 980px;
-  margin: 120px auto 32px; 
-  padding: 0 16px;
+    margin: 24px auto;
+    padding: 0 16px;
   }
   
-  /* tablets */
-  @media (max-width: 768px) {
-    .container {
-      margin: 100px auto 24px; /* λίγο μικρότερο κενό */
-    }
+  /* Top bar */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 16px;
   }
-
-  /* κινητά */
-@media (max-width: 480px) {
-    .container {
-      margin: 80px auto 16px; /* ακόμα μικρότερο κενό */
-    }
+  .topbar-left{
+    display:flex; align-items:center; gap:12px;
   }
-
-  /* HEADER*/
-  .header{
-  position: fixed;       
-  top: 12px;
-  left: 12px;
-  display:flex;
-  align-items:center;
-  gap:14px;
-  z-index: 1000;
+  .logo-lg{
+    width: 48px; height: 48px; object-fit: contain;
+    border-radius: 12px;
+    background: var(--panel-2);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: var(--shadow);
   }
-  
-  .brand{
-    display:flex;
-  align-items:center;
-  gap:14px;
-  padding:8px 14px;
-  background:linear-gradient(180deg, var(--panel), var(--panel-2));
-  border:1px solid rgba(255,255,255,.06);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+  :root[data-theme="light"] .logo-lg{
+    border-color: #e5e9f2;
+  }
+  .title{
+    font-weight: 800; letter-spacing:.2px; font-size: 20px;
+  }
+  .topbar-actions{
+    display:flex; gap:8px;
   }
   
-  .brand-logo{
-   height: 80px; 
-  width: auto;
-  object-fit: contain;
-  border-radius: 12px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.02);
+  /* Buttons */
+  .button{
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: linear-gradient(45deg,var(--accent), var(--accent-2));
+    color:#0a0f1d;border:none;cursor:pointer;font-weight:700;
   }
-  /* tablet */
-@media (max-width: 768px) {
-    .brand-logo {
-      height: 64px;
-    }
-  }
+  .button:disabled{ opacity:.7; cursor:not-allowed; }
   
-  /* κινητό */
-  @media (max-width: 480px) {
-    .brand-logo {
-      height: 48px;
-    }
+  .btn-ghost{
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--chip);
+    color: var(--text);
+    border: 1px solid var(--chip-border);
+    cursor:pointer;
   }
+  .btn-ghost:hover{ filter: brightness(1.05); }
+  .btn-ghost.danger{ color: var(--danger); border-color: rgba(214,66,66,.4); }
   
-  .brand h1{
-    margin:0;
-  font-size: 26px;
-  font-weight:700;
-  color:#fff;
-  }
-  
-  /* Info bar */
-  .info{
-    margin: 10px 0 18px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .info-badge{
-    font-size:12px;
-    color: var(--muted);
-    border:1px solid rgba(255,255,255,.12);
-    background: rgba(255,255,255,.03);
-    padding:6px 10px;
-    border-radius: 999px;
-  }
-  
-  /* Card + chat area */
+  /* Card / layout */
   .card{
     background:linear-gradient(180deg, var(--panel), var(--panel-2));
     border:1px solid rgba(255,255,255,.06);
@@ -116,16 +100,42 @@
     box-shadow: var(--shadow);
     overflow: hidden;
   }
+  :root[data-theme="light"] .card{
+    border-color: #e5e9f2;
+  }
   
   .chat{
     display:flex;
-    height: calc(78vh);
+    height: calc(80vh);
   }
   
+  .sidebar{
+    width: 280px; min-width: 240px;
+    border-right:1px solid rgba(255,255,255,.06);
+    padding: 16px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  :root[data-theme="light"] .sidebar{
+    border-right-color: #e5e9f2;
+  }
+  
+  .sidebar h3{
+    margin:4px 0 8px 0;font-size:14px;color:var(--muted);
+    letter-spacing:.3px;font-weight:600;
+  }
+  
+  .fav-item{
+    display:flex; align-items:flex-start; justify-content:space-between;
+    gap:10px;
+    background: var(--chip);
+    border:1px solid var(--chip-border);
+    border-radius: 12px;
+    padding:10px 12px;
+  }
+  .fav-text{ font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  
   .main{
-    flex:1;
-    display:flex;
-    flex-direction:column;
+    flex:1;display:flex;flex-direction:column;
   }
   
   .messages{
@@ -139,25 +149,32 @@
     border-radius: 14px;
     white-space: pre-wrap;
     word-wrap: break-word;
+    position: relative;
   }
-  
+  .msg .msg-actions{
+    margin-top: 6px;
+  }
   .msg.user{
     align-self:flex-end;
     background: rgba(91,140,255,.12);
     border:1px solid rgba(91,140,255,.35);
   }
-  
   .msg.bot{
     align-self:flex-start;
     background: rgba(255,255,255,.03);
     border:1px solid rgba(255,255,255,.08);
   }
+  :root[data-theme="light"] .msg.bot{
+    background:#fff; border-color:#e5e9f2;
+  }
   
-  /* Composer */
   .footer{
     border-top:1px solid rgba(255,255,255,.06);
     padding: 12px;
     display:flex; gap:10px;
+  }
+  :root[data-theme="light"] .footer{
+    border-top-color:#e5e9f2;
   }
   
   .input{
@@ -169,27 +186,18 @@
     color: var(--text);
     outline:none;
     resize: vertical;
-    min-height: 48px;
   }
   .input:focus{ border-color: rgba(91,140,255,.5); }
   
-  .button{
-    padding: 12px 16px;
-    border-radius: 12px;
-    background: linear-gradient(45deg,var(--accent), var(--accent-2));
-    color:#0a0f1d;border:none;cursor:pointer;font-weight:700;
-  }
-  .button:disabled{ opacity:.7; cursor:not-allowed; }
-  
   .meta{
-    margin: 8px 20px 14px;
-    color: var(--muted);
-    font-size: 12px;
+    margin: 6px 12px 12px; color: var(--muted); font-size: 12px;
   }
   
-  /* small screens */
-  @media (max-width: 520px) {
-    .brand-logo { width: 44px; height: 44px; }
-    .brand h1 { font-size: 18px; }
+  /* Small screens */
+  @media (max-width: 760px){
+    .chat{ height: 72vh; }
+    .sidebar{ display:none; }
+    .logo-lg{ width:40px; height:40px; }
+    .title{ font-size: 18px; }
   }
   

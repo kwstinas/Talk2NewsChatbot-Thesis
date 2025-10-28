@@ -118,13 +118,12 @@ def filter_recent_documents(documents, days=30, desired_category=None):
     logging.info(f"🧪 Νέα φίλτρα άρθρων: {len(filtered_docs)} / {len(documents)}")
     return filtered_docs
 
-# Scoring params & helpers
-
-MAX_AGE_DAYS = 45
-RECENCY_WEIGHT = 0.25   # 25% επίδραση φρεσκάδας
-TAU_DAYS = 15.0         # εκθετική αποσύνθεση (όσο μικρότερο, τόσο «τιμωρεί» τα παλιά)
-MIN_SIM = 0.15          # κατώφλι ομοιότητας (μετά τον μετασχηματισμό)
-MIN_LEN = 300           # ελάχιστο καθαρό μήκος κειμένου
+# Scoring params & helpers 
+MAX_AGE_DAYS = 30        
+RECENCY_WEIGHT = 0.5 
+TAU_DAYS = 3.0         
+MIN_SIM = 18.0         
+MIN_LEN = 300           
 
 def _to_utc(dt_str):
     """Μετατρέπει οποιοδήποτε date string σε aware UTC datetime."""
@@ -141,12 +140,26 @@ def _age_days(dt_str):
         return 10**9
     return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
 
+
 def _recency_boost(dt_str):
-    """0..1 boost: 1 για πολύ πρόσφατο, ~0 για παλιό. Κόβουμε άρθρα >MAX_AGE_DAYS."""
+    
     age = _age_days(dt_str)
-    if age > MAX_AGE_DAYS:
+   
+    if age > 40:  
         return 0.0
-    return math.exp(-age / TAU_DAYS)
+   
+    if age <= 1:    # Σήμερα
+        return 0.8  # Από 1.0
+    elif age <= 3:  # 1-3 ημέρες
+        return 0.6  # Από 0.9
+    elif age <= 7:  # 1 εβδομάδα
+        return 0.4  # Από 0.7
+    elif age <= 14: # 2 εβδομάδες
+        return 0.2  # Από 0.4
+    elif age <= 30: # 1 μήνας
+        return 0.1  # Νέο
+    else:           # 1-2 μήνες
+        return 0.05 # Νέο
 
 def _distance_to_similarity(raw_score: float) -> float:
     """
@@ -158,54 +171,117 @@ def _distance_to_similarity(raw_score: float) -> float:
         d = 1.0
     return 1.0 / (1.0 + d) if d > 1.0 else max(0.0, 1.0 - d)
 
-def _final_score(similarity: float, published_iso: str) -> float:
+def _final_score(similarity: float, published_iso: str, query: str = "") -> float:
+    
     r = _recency_boost(published_iso)
-    return similarity * (1.0 - RECENCY_WEIGHT) + RECENCY_WEIGHT * r
+    
+    # DYNAMIC WEIGHTING based on query
+    query_lower = (query or "").lower()
+    
+    # Αν η ερώτηση ζητάει ρητά πρόσφατα νέα
+    if any(keyword in query_lower for keyword in 
+           ["today", "latest", "recent", "breaking", "just", "new", "πρόσφατα", "σήμερα", "νέα"]):
+        recency_weight = 0.65  #  Υψηλότερη προτεραιότητα σε recency
+    else:
+        recency_weight = RECENCY_WEIGHT  # Normal weight
+    
+    return similarity * (1.0 - recency_weight) + recency_weight * r
 
 
-def _select_single_article(hits_with_raw, query_kws=None, *, hard_recency=True, min_sim=MIN_SIM):
+def _select_single_article(hits_with_raw, query_kws=None, query: str = "", *, hard_recency=False, min_sim=0.10):
     """
-    hits_with_raw: λίστα από tuples (doc, raw_score)
-    -> επιστρέφει (doc, topic_match: bool) ή (None, False)
-
-    hard_recency=True  => κόβει τελείως άρθρα > MAX_AGE_DAYS
-    hard_recency=False => δεν κόβει παλιά· απλώς τα σκοράρει χαμηλότερα
+    ΕΝΗΜΕΡΩΜΕΝΗ: Πιο ελεύθερη επιλογή άρθρων με έμφαση στο relevance παρά στο recency
     """
     query_kws = query_kws or []
     candidates = []
+    
+    current_date = datetime.now(timezone.utc)
+    
+    print(f"🔍 FILTERING ARTICLES - Current date: {current_date.date()}")
+    print(f"📊 Processing {len(hits_with_raw)} hits | hard_recency: {hard_recency} | min_sim: {min_sim}")
 
-    for doc, raw in hits_with_raw:
+    for i, (doc, raw) in enumerate(hits_with_raw):
         sim = _distance_to_similarity(raw)
+        
+        # Βασικό similarity filtering
         if sim < min_sim:
             continue
 
         text = (doc.page_content or "").strip()
-        if len(text) < MIN_LEN:
+        if len(text) < 200:  # Ελαφρώς μικρότερο minimum
             continue
 
         pub = doc.metadata.get("published_date")
-
-        # σε strict mode κόβουμε ό,τι είναι εκτός παραθύρου
-        if hard_recency and _recency_boost(pub) == 0.0:
+        pub_dt = _to_utc(pub)
+        
+        if not pub_dt:
+            continue
+            
+        # Recency calculation
+        age_days = (current_date - pub_dt).days
+        
+        # ΜΟΝΟ αν hard_recency=True, απορρίπτουμε παλιά άρθρα
+        if hard_recency and age_days > 14:
             continue
 
-        # topic match: τουλάχιστον ένα keyword μέσα στο title+content
-        topic_match = _text_contains_any(f"{doc.metadata.get('title','')} {text}", query_kws)
+        # Πολύ πιο ελεύθερο title filtering
+        title = doc.metadata.get("title", "").lower()
+        generic_indicators = ["home", "page", "archive"]  # Λιγότεροι δείκτες
+        if any(indicator in title for indicator in generic_indicators) and len(title) < 15:
+            continue
 
-        # score: similarity + recency boost 
-        score = _final_score(sim, pub) + (0.03 if topic_match and query_kws else 0.0)
-        candidates.append((score, doc, sim, pub, topic_match))
+        # Topic matching
+        topic_match = _text_contains_any(f"{doc.metadata.get('title','')} {text}", query_kws)
+    
+        # ΒΕΛΤΙΩΜΕΝΟ SCORING:
+        base_score = _final_score(sim, pub, query)
+        
+        # Μέτριο bonus για topic match
+        if topic_match and query_kws:
+            base_score += 0.08
+            
+        # Μέτριο bonus για πρόσφατα άρθρα
+        if age_days <= 7:
+            base_score += 0.10
+        elif age_days <= 14:
+            base_score += 0.05
+            
+        # Πολύ μικρό penalty για παλιά άρθρα
+        if age_days > 30:
+            base_score *= 0.9
+            
+        # Bonus για query-specific relevance
+        if "ai" in query.lower() and any(ai_term in text.lower() for ai_term in ["ai", "artificial", "openai", "chatgpt"]):
+            base_score += 0.15
+            
+        if "trump" in query.lower() and any(pol_term in text.lower() for pol_term in ["trump", "president", "election", "white house"]):
+            base_score += 0.15
+            
+        candidates.append((base_score, doc, sim, pub, topic_match, age_days))
 
     if not candidates:
+        print("No candidates passed basic filtering - using fallback")
+        # Fallback: πάρε το κορυφαίο από similarity search
+        if hits_with_raw:
+            best_doc = hits_with_raw[0][0]
+            pub_date = best_doc.metadata.get("published_date", "No date")
+            title = best_doc.metadata.get('title', 'No title')[:60]
+            print(f"🔄 FALLBACK: Using top similarity result: {pub_date} | '{title}...'")
+            return best_doc, False
         return None, False
 
+    # Ταξινόμηση και επιλογή
     candidates.sort(key=lambda x: x[0], reverse=True)
-    best_score, best_doc, best_sim, best_pub, best_match = candidates[0]
-    logging.info(
-        f"🔎 Επιλέχθηκε άρθρο: '{best_doc.metadata.get('title','—')}' "
-        f"| sim={best_sim:.3f}, rec={_recency_boost(best_pub):.3f}, final={best_score:.3f}, "
-        f"date={best_pub}, topic_match={best_match}"
-    )
+    
+    print("TOP CANDIDATES:")
+    for i, (score, doc, sim, pub, topic_match, age) in enumerate(candidates[:5]):
+        title = doc.metadata.get('title', 'No title')
+        source = doc.metadata.get('source', 'Unknown')
+        print(f"  {i+1}. Score: {score:.3f} | Age: {age}d | Sim: {sim:.3f} | {source} | '{title[:50]}...'")
+
+    best_score, best_doc, best_sim, best_pub, best_match, best_age = candidates[0]
+    
+    print(f"SELECTED: '{best_doc.metadata.get('title','—')}' | Score: {best_score:.3f} | Age: {best_age}d")
     return best_doc, best_match
 
 
@@ -271,6 +347,21 @@ def _extractive_snippets(doc, user_query, k=4, min_sim=0.20):
     if chosen and float(np.mean(sims)) >= min_sim:
         return chosen
     return []
+
+def enhance_query_for_search(query: str) -> str:
+    """
+    Βελτιώνει τα queries για καλύτερη αναζήτηση
+    """
+    query_lower = query.lower()
+    
+    # 🔥 ΑΛΛΑΓΗ: Πιο συγκεκριμένα keywords
+    if any(word in query_lower for word in ["latest", "recent", "new", "today", "breaking"]):
+        return query + " news updates 2025 current"
+    elif any(word in query_lower for word in ["trump", "biden", "politics"]):
+        return query + " election president US America 2025"
+    
+    # Γενική βελτίωση
+    return query
 
 
 def _build_prompt_one_article(user_query: str, doc, lang: str, topic_match: bool) -> str:
@@ -416,15 +507,41 @@ def generate_contextual_answer(user_query, category: str = None):
         if vectorstore is None:
             return "Σφάλμα: Το vectorstore δεν είναι διαθέσιμο."
 
+        # 🔍 CRITICAL DEBUG: Check what articles we're finding
+        print(f"🔍 RAG QUERY: '{user_query}'")
+        
         # Similarity search με score 
         t0 = perf_counter()
         hits_with_raw = similarity_search(user_query, k=40)
         t_faiss = (perf_counter() - t0) * 1000.0
 
+        #  DEBUG: Show top search results with dates
+        print(" TOP 10 SEARCH RESULTS:")
+        for i, (doc, score) in enumerate(hits_with_raw[:10]):
+            title = doc.metadata.get('title', 'No title')[:70]
+            date = doc.metadata.get('published_date', 'No date')
+            source = doc.metadata.get('link', 'No link')[:40]
+            
+            # Calculate actual age
+            try:
+                pub_dt = _to_utc(date)
+                if pub_dt:
+                    now = datetime.now(timezone.utc)
+                    age_days = (now - pub_dt).days
+                else:
+                    age_days = "N/A"
+            except:
+                age_days = "N/A"
+                
+            print(f"  {i+1}. '{title}'...")
+            print(f"     Date: {date} | Age: {age_days} days | Source: {source}")
+            print(f"     Score: {score:.3f}")
+            print()
+
         if not hits_with_raw:
             return _fallback_no_context(user_query)
 
-        # Keyword boost  βάσει του query
+        # Keyword boost βάσει του query
         query_kws = _keywords_for_query(user_query)
         if query_kws:
             boosted = []
@@ -459,8 +576,9 @@ def generate_contextual_answer(user_query, category: str = None):
         chosen, topic_match = _select_single_article(
             hits_with_raw,
             query_kws=query_kws,
-            hard_recency=True,
-            min_sim=MIN_SIM
+            query=user_query,  # Pass query for dynamic weighting
+            hard_recency=False,
+            min_sim=0.10
         )
 
         # relaxed pass: αν δεν βρεθεί τίποτα, επέτρεψε παλιά άρθρα & χαμήλωσε λίγο το min_sim
@@ -468,6 +586,7 @@ def generate_contextual_answer(user_query, category: str = None):
             chosen, topic_match = _select_single_article(
                 hits_with_raw,
                 query_kws=query_kws,
+                query=user_query,     # Pass query for dynamic weighting
                 hard_recency=False,   # μην κόβεις παλιά
                 min_sim=0.10          # δέξου ελαφρώς χαμηλότερη ομοιότητα
             )
@@ -479,6 +598,26 @@ def generate_contextual_answer(user_query, category: str = None):
 
         if not chosen:
             return _fallback_no_context(user_query)
+
+        # 🔍 DEBUG: Show final selected article
+        if chosen:
+            selected_date = chosen.metadata.get('published_date', 'No date')
+            selected_title = chosen.metadata.get('title', 'No title')
+            try:
+                pub_dt = _to_utc(selected_date)
+                if pub_dt:
+                    now = datetime.now(timezone.utc)
+                    age_days = (now - pub_dt).days
+                else:
+                    age_days = "N/A"
+            except:
+                age_days = "N/A"
+                
+            print(f"🎯 FINAL SELECTED ARTICLE:")
+            print(f"   Title: {selected_title}")
+            print(f"   Date: {selected_date} (Age: {age_days} days)")
+            print(f"   Source: {chosen.metadata.get('link', 'No link')}")
+            print()
 
         # Prompt για ένα άρθρο — πρώτα προσπαθούμε extractive snippets
         lang = _detect_lang(user_query)
@@ -516,7 +655,6 @@ def generate_contextual_answer(user_query, category: str = None):
     except Exception as e:
         logging.exception(f"Σφάλμα κατά την επεξεργασία της ερώτησης: {str(e)}")
         return f"Σφάλμα κατά την επεξεργασία της ερώτησης: {str(e)}"
-
 
 
 def _detect_lang(q: str) -> str:

@@ -95,10 +95,12 @@ def _pick_entry_date_iso(entry) -> str:
 
 
 # --------- Core crawling ---------
-def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> None:
+def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> int:  # 🚨 ΑΛΛΑΓΗ: -> int αντί για -> None
     """
     Διατρέχει όλα τα FEEDS, καθαρίζει περιεχόμενο/ημερομηνίες και
     εισάγει/ενημερώνει άρθρα στη Mongo με dedup (link/hash).
+    
+    Επιστρέφει: αριθμός νέων/ενημερωμένων άρθρων  # 🚨 ΠΡΟΣΘΗΚΗ
     """
     logger.info(" Ξεκίνησε το crawling ειδήσεων...")
     new_articles: List[Dict[str, Any]] = []
@@ -172,7 +174,8 @@ def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> None:
         logger.info(f"Ολοκληρώθηκε το crawling! Νέα/ενημερωμένα άρθρα: {total} (inserted={inserted}, updated={updated}).")
     else:
         logger.warning("⚠️ Δεν βρέθηκαν νέα/ενημερωμένα άρθρα.")
-
+    
+    return total  # 🚨 ΠΡΟΣΘΗΚΗ: Επιστροφή του total
 
 # --------- Optional CLI entrypoint ---------
 if __name__ == "__main__":
