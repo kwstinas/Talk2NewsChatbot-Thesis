@@ -33,35 +33,21 @@ The system crawls news articles from multiple Greek and international sources, s
   - Interactive script (`ask_chatbot.py`) for quick local testing without the API.
 
 ---
-## Architecture
-[Web Sources / RSS Feeds]
-│
-▼
-[Crawler - feedparser]
-│
-▼
-[MongoDB Database]
-│
-▼
-[Vectorstore - FAISS + HuggingFace Embeddings]
-│
-▼
-[RAG Pipeline]
-│
-▼
-[LLM - Llama 3.1 (via llama.cpp)]
-│
-▼
-[FastAPI Backend / CLI Tool]
-│
-▼
-[User Interface]
+## Key Features That Make It Useful
 
-##  Next Steps
+**Bilingual Intelligence**
+The system understands and responds in both English and Greek, making it equally useful for local Greek news and international coverage.
 
-While the current version of the project is fully functional, there are several improvements planned:
+**Context-Aware Conversations**
+Ask "Tell me about the new AI developments" and then follow up with "What about European regulations?" - the system maintains context naturally.
 
-- Develop a simple **frontend interface** (React-based chatbot) for easier user interaction.  
-- Improve the **LLM integration** for more concise and factual responses.
-- Improved retrieval pipeline: Use Pandas for lightweight pre-filtering of articles (by recency, length, and duplicates) before FAISS similarity search.
-- Deployment: Containerize the application (Docker) for easy setup and sharing, and prepare a lightweight demo version.
+**Fresh Information**
+With hourly crawling and smart updating, you're always getting information from the latest available articles rather than static knowledge.
+
+**Multi-Source Synthesis**
+When multiple outlets cover the same story, the system can identify different perspectives and provide a more comprehensive answer.
+
+---
+## Getting Started
+
+The system is designed to be run locally, keeping your queries private and avoiding API costs. You'll need to provide your own Llama model file (due to size constraints), but everything else is included and ready to run..
