@@ -6,13 +6,13 @@ from llama_cpp import Llama
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ✅ Ρύθμιση μοντέλου 
+#  Ρύθμιση μοντέλου 
 LLAMA_MODEL_PATH = os.getenv(
     "LLAMA_MODEL_PATH",
     "/home/kwstinas/Projects/Talk2News-Chatbot/models/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf",
 )
 
-# ✅ Ρυθμίσεις φόρτωσης
+#  Ρυθμίσεις φόρτωσης
 LLAMA_N_CTX = int(os.getenv("LLAMA_N_CTX", "4096"))
 LLAMA_N_GPU_LAYERS = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))  # 0 = CPU
 LLAMA_CHAT_FORMAT = os.getenv("LLAMA_CHAT_FORMAT", "llama-3")   
@@ -39,11 +39,11 @@ def load_llm():
             f16_kv=True,
         )
         logger.info(
-            "✅ Llama loaded | path=%s | chat_format=%s | n_ctx=%d | n_gpu_layers=%d",
+            " Llama loaded | path=%s | chat_format=%s | n_ctx=%d | n_gpu_layers=%d",
             LLAMA_MODEL_PATH, LLAMA_CHAT_FORMAT, LLAMA_N_CTX, LLAMA_N_GPU_LAYERS
         )
     except Exception as e:
-        logger.error("⚠️ LLama model failed to load: %s", e)
+        logger.error(" LLama model failed to load: %s", e)
         _llm = None
     return _llm
 
@@ -59,12 +59,12 @@ def generate_answer(llm, prompt: str) -> str:
         if llm is None:
             return "Σφάλμα: Το μοντέλο δεν φορτώθηκε (έλεγξε LLAMA_MODEL_PATH ή το αρχείο .gguf)."
 
-        # ---- Ασφαλής μετατροπή & καθάρισμα UTF-8 (αποφυγή surrogate errors) ----
+        #  Ασφαλής μετατροπή & καθάρισμα UTF-8 
         if not isinstance(prompt, str):
             prompt = str(prompt)
         prompt = prompt.encode("utf-8", "ignore").decode("utf-8", "ignore").strip()
 
-        # ---- System/User split με markers (fallback: όλο ως user) ----
+        #  System/User split με markers 
         sys_part = ""
         user_part = prompt
         for sep in ("[ΕΡΩΤΗΣΗ ΧΡΗΣΤΗ]", "[USER QUESTION]"):
@@ -84,7 +84,7 @@ def generate_answer(llm, prompt: str) -> str:
             })
         messages.append({"role": "user", "content": user_part})
 
-        # ---- Κλήση στο chat completion με πιο “σφιχτές” παραμέτρους ----
+        #  Κλήση στο chat completion με πιο σφιχτές παραμέτρους
         resp = llm.create_chat_completion(
             messages=messages,
             temperature=0.15,
@@ -95,7 +95,7 @@ def generate_answer(llm, prompt: str) -> str:
             stop=["</s>", "[END]", "[ΤΕΛΟΣ]"],
         )
 
-        # ---- Ανάγνωση απάντησης ----
+        # Ανάγνωση απάντησης
         choice = resp.get("choices", [{}])[0]
         text = (
             choice.get("message", {}).get("content")
@@ -103,7 +103,7 @@ def generate_answer(llm, prompt: str) -> str:
             or ""
         )
 
-        # ---- Τελικό καθάρισμα ----
+        #  Τελικό καθάρισμα 
         text = text.encode("utf-8", "ignore").decode("utf-8", "ignore").strip()
         return text
 

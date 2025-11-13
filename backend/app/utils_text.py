@@ -24,7 +24,7 @@ def clean_html(raw_html: str) -> str:
 
 def normalize_published_date(value) -> str:
     """
-    Δέχεται string | datetime | time.struct_time και γυρνά ΠΑΝΤΑ ISO UTC string.
+    Δέχεται string | datetime | time.struct_time και γυρνά πάντα ISO UTC string.
     """
     if value is None:
         dt = datetime.now(UTC)

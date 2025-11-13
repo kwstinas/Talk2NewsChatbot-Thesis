@@ -6,12 +6,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Tuple
 from dateutil import parser
-
 from pymongo import MongoClient
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# ---- Ρυθμίσεις (όπως τα έχεις ήδη) ----
 MONGO_URL = "mongodb://172.25.240.1:27017/"
 DATABASE_NAME = "news_database"
 COLLECTION_NAME = "articles"
@@ -25,7 +23,7 @@ EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ----------------- Mongo helpers -----------------
+# Mongo helpers
 def _collection():
     client = MongoClient(MONGO_URL)
     db = client[DATABASE_NAME]
@@ -46,21 +44,21 @@ def _parse_flexible_date(date_str: str) -> datetime:
     if not date_str:
         return None
         
-    # Προσπάθησε ISO format πρώτα (πιο γρήγορο)
+    # Προσπάθησε ISO format πρώτα 
     try:
         if 'T' in date_str:  # ISO format
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
     except:
         pass
         
-    # Fallback σε dateutil parser (πιο flexible αλλά πιο αργό)
+    # Fallback σε dateutil parser 
     try:
         dt = parser.parse(date_str)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
     except:
-        logger.warning(f"⚠️ Could not parse date: {date_str}")
+        logger.warning(f" Could not parse date: {date_str}")
         return None
 
 def _load_articles_since(iso_utc: str) -> List[dict]:
@@ -100,7 +98,7 @@ def _load_articles_since(iso_utc: str) -> List[dict]:
     
     return arts
 
-# ----------------- Chunking -----------------
+# Chunking
 def _create_chunks(articles: List[dict]) -> Tuple[List[str], List[dict]]:
     texts, metadatas = [], []
     for a in articles:
@@ -130,7 +128,7 @@ def _create_chunks(articles: List[dict]) -> Tuple[List[str], List[dict]]:
     logger.info(f"Δημιουργήθηκαν {len(texts)} chunks.")
     return texts, metadatas
 
-# ----------------- Meta helpers -----------------
+#  Meta helpers 
 def _meta_path() -> str:
     return os.path.join(SAVE_PATH, "meta.json")
 
@@ -149,7 +147,7 @@ def _write_meta(meta: dict):
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-# ----------------- Full build -----------------
+#  Full build 
 def build_vectorstore_full():
     """
     Καθαρό rebuild του FAISS index από ΟΛΑ τα άρθρα.
@@ -164,7 +162,7 @@ def build_vectorstore_full():
     # Καθαρό rebuild
     if os.path.exists(SAVE_PATH):
         shutil.rmtree(SAVE_PATH)
-        logger.info("🧹 Διαγράφηκε το προηγούμενο FAISS index.")
+        logger.info(" Διαγράφηκε το προηγούμενο FAISS index.")
 
     vs = FAISS.from_texts(texts, embeddings, metadatas=metadatas)
     vs.save_local(SAVE_PATH)
@@ -179,17 +177,17 @@ def build_vectorstore_full():
         "embedding_model": EMBEDDING_MODEL,
         "embedding_dim": dim,
         "chunks": len(texts),
-        "last_built_iso": _utc_now_iso(),  # timestamp τελευταίου build
+        "last_built_iso": _utc_now_iso(),  
     }
     _write_meta(meta)
 
-    logger.info(f"✅ Ολοκληρώθηκε το FULL FAISS vectorstore με {len(texts)} chunks!")
-    logger.info(f"ℹ️ Embedding model: {EMBEDDING_MODEL} | dim={dim}")
+    logger.info(f" Ολοκληρώθηκε το FULL FAISS vectorstore με {len(texts)} chunks!")
+    logger.info(f" Embedding model: {EMBEDDING_MODEL} | dim={dim}")
 
-# ----------------- Incremental update -----------------
+#  Incremental update 
 def incremental_update_vectorstore(hours: int = 24):
     """
-    Προσθέτει ΜΟΝΟ τα νέα άρθρα των τελευταίων `hours` (default 24 ώρες)
+    Προσθέτει μόνο τα νέα άρθρα των τελευταίων `hours` (default 24 ώρες)
     στο υπάρχον FAISS index. Αν δεν υπάρχει index, κάνει full build.
     """
     try:
@@ -200,7 +198,6 @@ def incremental_update_vectorstore(hours: int = 24):
 
         embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
-        # Διαβάζουμε meta (για πληροφοριακούς λόγους)
         meta = _read_meta()
 
         cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -209,12 +206,12 @@ def incremental_update_vectorstore(hours: int = 24):
         # Φέρε νέα άρθρα από Mongo
         articles = _load_articles_since(cutoff_iso)
         if not articles:
-            logger.info("🔎 Δεν βρέθηκαν νέα άρθρα για incremental ενημέρωση.")
+            logger.info(" Δεν βρέθηκαν νέα άρθρα για incremental ενημέρωση.")
             return
 
         texts, metadatas = _create_chunks(articles)
         if not texts:
-            logger.info("🔎 Δεν προέκυψαν νέα chunks για incremental ενημέρωση.")
+            logger.info(" Δεν προέκυψαν νέα chunks για incremental ενημέρωση.")
             return
 
         # Φόρτωσε τον υπάρχον FAISS και κάνε merge
@@ -245,10 +242,10 @@ def incremental_update_vectorstore(hours: int = 24):
         )
         _write_meta(meta)
 
-        logger.info(f"✅ Incremental ενημέρωση ολοκληρώθηκε. Προστέθηκαν {len(texts)} νέα chunks. Σύνολο ~{new_chunks_total}.")
+        logger.info(f" Incremental ενημέρωση ολοκληρώθηκε. Προστέθηκαν {len(texts)} νέα chunks. Σύνολο ~{new_chunks_total}.")
 
     except Exception as e:
-        logger.error(f"❌ Σφάλμα incremental update: {e}")
+        logger.error(f" Σφάλμα incremental update: {e}")
         raise
 
 # Προηγούμενο entrypoint για συμβατότητα

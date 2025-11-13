@@ -11,16 +11,14 @@ import pytz
 import os
 from datetime import datetime, timedelta
 import threading
-
-
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from pymongo import MongoClient
 from datetime import datetime, timedelta
-
-
 from .crawler.crawler import crawl
 from .api.routes import router as api_router
 from .chatbot.vectorstore import load_vectorstore
-
+from fastapi import Request
 # FastAPI app
 app = FastAPI(
     title="Talk2News Chatbot",
@@ -53,25 +51,25 @@ def _crawl_only():
     try:
         new_articles_count = crawl()
         
-        # 🔧 FIX: Αν ο crawler επιστρέφει None, θεωρούμε 0
+        #Αν ο crawler επιστρέφει None, θεωρούμε 0
         if new_articles_count is None:
             new_articles_count = 0
-            print("⚠️ Crawler returned None - treating as 0 new articles")
+            print("Crawler returned None - treating as 0 new articles")
         
         crawl_duration = (datetime.now() - start_time).total_seconds()
         
-        print(f"✅ Crawl completed in {crawl_duration:.1f}s - {new_articles_count} new articles")
+        print(f"Crawl completed in {crawl_duration:.1f}s - {new_articles_count} new articles")
         return new_articles_count, crawl_duration
         
     except Exception as e:
-        print(f"❌ Crawl failed: {e}")
+        print(f"Crawl failed: {e}")
         return 0, 0  # Σε περίπτωση σφάλματος, επέστρεψε 0
 
 def _async_update_vectorstore():
     """
     Ασύγχρονο incremental update - δεν μπλοκάρει το main thread.
     """
-    print("🔄 Starting ASYNC vectorstore update...")
+    print("Starting ASYNC vectorstore update...")
     try:
         # Μόνο άρθρα των τελευταίων 2 ωρών για speed
         incremental_update_vectorstore(hours=2)
@@ -80,11 +78,11 @@ def _async_update_vectorstore():
         vs = reload_vectorstore()
         if vs:
             doc_count = len(vs.docstore._dict)
-            print(f"✅ ASYNC vectorstore update completed! ({doc_count} documents)")
+            print(f"ASYNC vectorstore update completed! ({doc_count} documents)")
         else:
-            print("⚠️ ASYNC vectorstore update failed")
+            print("ASYNC vectorstore update failed")
     except Exception as e:
-        print(f"❌ ERROR in async vectorstore update: {e}")
+        print(f"ERROR in async vectorstore update: {e}")
 
 def _crawl_and_async_update():
     """
@@ -92,31 +90,31 @@ def _crawl_and_async_update():
     """
     new_articles_count, crawl_duration = _crawl_only()
     
-    # 🔧 FIX: Explicit check για None και > 0
+    # Explicit check για None και > 0
     if new_articles_count is not None and new_articles_count > 0:
-        print(f"📥 Found {new_articles_count} new articles - starting async FAISS update...")
+        print(f" Found {new_articles_count} new articles - starting async FAISS update...")
         
         # Ασύγχρονο update - δεν περιμένει
         update_thread = threading.Thread(target=_async_update_vectorstore)
         update_thread.daemon = True
         update_thread.start()
         
-        print("⚡ Async FAISS update started in background...")
+        print("Async FAISS update started in background...")
     else:
-        print("ℹ️ No new articles - skipping FAISS update")
+        print("No new articles - skipping FAISS update")
 
 @app.on_event("startup")
 def startup_event():
-    # Αρχικό crawl (σύγχρονο για να είμαστε σίγουροι)
-    print("🚀 Initial startup - performing sync crawl and update...")
+    # Αρχικό crawl 
+    print("Initial startup - performing sync crawl and update...")
     new_articles_count, _ = _crawl_only()
     
-    # 🔧 FIX: Safe check για startup
+    # Safe check για startup
     if new_articles_count is not None and new_articles_count > 0:
-        print(f"🔄 Starting sync vectorstore update with {new_articles_count} new articles...")
-        _async_update_vectorstore()  # Σύγχρονο στο startup
+        print(f"Starting sync vectorstore update with {new_articles_count} new articles...")
+        _async_update_vectorstore()  
     else:
-        print("ℹ️ No new articles on startup - skipping initial update")
+        print("No new articles on startup - skipping initial update")
     
     # Αρχική φόρτωση vectorstore
     vectorstore = load_vectorstore()
@@ -124,7 +122,7 @@ def startup_event():
         print("Σφάλμα: Το vectorstore δεν είναι διαθέσιμο κατά την εκκίνηση του server!")
     else:
         doc_count = len(vectorstore.docstore._dict)
-        print(f"✅ Vectorstore loaded! ({doc_count} documents)")
+        print(f"Vectorstore loaded! ({doc_count} documents)")
 
     # jobs - crawl με async update
     scheduler.add_job(
@@ -148,7 +146,7 @@ def startup_event():
     print("Scheduler ξεκίνησε! Fast crawl + async FAISS update κάθε 1 ώρα")
 
 def _safe_full_incremental_update():
-    """Ασφαλής full incremental update (σύγχρονο - νυχτερινό)."""
+    """Ασφαλής full incremental update."""
     try:
         print(f"[{datetime.now()}] Starting nightly FULL FAISS update...")
         incremental_update_vectorstore(hours=24)
@@ -156,9 +154,9 @@ def _safe_full_incremental_update():
         vs = reload_vectorstore()
         if vs:
             doc_count = len(vs.docstore._dict)
-            print(f"✅ Nightly FULL FAISS update completed! ({doc_count} documents)")
+            print(f"Nightly FULL FAISS update completed! ({doc_count} documents)")
     except Exception as e:
-        print(f"❌ ERROR in nightly FAISS update: {e}")
+        print(f"ERROR in nightly FAISS update: {e}")
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -190,7 +188,7 @@ def _debug_check_recent_articles():
     cutoff_iso = cutoff.isoformat()
     
     recent_count = collection.count_documents({"published_date": {"$gte": cutoff_iso}})
-    print(f"🔍 DEBUG: Άρθρα των τελευταίων 2 ημερών: {recent_count}")
+    print(f"DEBUG: Άρθρα των τελευταίων 2 ημερών: {recent_count}")
     
     # Δείξε μερικά πρόσφατα άρθρα
     recent_articles = list(collection.find(
@@ -220,7 +218,7 @@ def _debug_check_new_articles():
         ]
     }).sort("_id", -1).limit(20))
     
-    print(f"🔍 RECENT ARTICLES (last 7 days): {len(recent_articles)}")
+    print(f"RECENT ARTICLES (last 7 days): {len(recent_articles)}")
     for art in recent_articles[:5]:  # Πρώτα 5 μόνο
         title = art.get('title', 'No title')[:60]
         pub_date = art.get('published_date', 'No date')
@@ -231,7 +229,7 @@ def _debug_check_new_articles():
         print(f"    Source: {source}")
 
 def _debug_check_actual_articles():
-    """Έλεγχος για ΠΡΑΓΜΑΤΙΚΑ πρόσφατα άρθρα."""
+    """Έλεγχος για πρόσφατα άρθρα."""
     from pymongo import MongoClient
     from datetime import datetime, timedelta
     
@@ -243,14 +241,14 @@ def _debug_check_actual_articles():
     cutoff = datetime.now() - timedelta(days=3)
     cutoff_iso = cutoff.isoformat()
     
-    print("🔍 CHECKING FOR RECENT ARTICLES (last 3 days):")
+    print("CHECKING FOR RECENT ARTICLES (last 3 days):")
     
     # Έλεγχος με fetched_at (πιο αξιόπιστο)
     recent_by_fetched = list(collection.find({
         "fetched_at": {"$gte": cutoff_iso}
     }).sort("fetched_at", -1).limit(10))
     
-    print(f"📥 Articles by fetched_at: {len(recent_by_fetched)}")
+    print(f"Articles by fetched_at: {len(recent_by_fetched)}")
     for art in recent_by_fetched:
         title = art.get('title', 'No title')[:70]
         fetched = art.get('fetched_at', 'No fetch')
@@ -276,3 +274,12 @@ def _debug_check_actual_articles():
     for art in greece_politics:
         title = art.get('title', 'No title')[:70]
         print(f"  - '{title}'...")
+
+@app.middleware("http")
+async def add_cache_control_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.endswith(('.jsx', '.js')):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response

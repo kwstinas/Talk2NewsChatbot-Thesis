@@ -1,6 +1,6 @@
 const { useEffect, useRef, useState } = React;
 
-/* ========== Message bubbles ========== */
+/* Message bubbles */
 function Message({ role, text, onFav, isFavoritable }) {
   return (
     <div className={`msg ${role === "user" ? "user" : "bot"}`}>
@@ -161,52 +161,64 @@ function ChatApp() {
     try { localStorage.removeItem("t2n_chat"); } catch {}
   };
 
-  // Daily Digest:
-  // A) backend endpoint   /api/digest
-  // B) fallback χωρίς backend
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  // Daily Digest function - COMPLETELY SEPARATE from askAPI
   const requestDigest = async () => {
+    console.log("DIGEST-ONLY FLOW STARTED");
     setLoading(true);
+    
     try {
-      // Προσπάθησε backend-first
-      const res = await fetch("/api/digest");
-      if (res.ok) {
-        const data = await res.json();
-        const answer = (data.answer || data.result || data.text || "").trim();
-        if (answer) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", text: answer, onFav: () => addFavorite(answer) },
-          ]);
-          setLoading(false);
-          return;
-        }
+      console.log("Step 1: Calling /api/digest...");
+      
+      const response = await fetch("/api/digest?n=5&hours=24&lang=en");
+      console.log("Digest response status:", response.status);
+      
+      if (!response.ok) {
+        console.log("Digest failed with status:", response.status);
+        // Add error message
+        setMessages((prev) => [
+          ...prev,
+          { 
+            role: "assistant", 
+            text: "Δεν μπόρεσα να βρω πρόσφατες ειδήσεις για σύνοψη. Δοκίμασε αργότερα.",
+            onFav: () => addFavorite("Δεν βρέθηκαν πρόσφατες ειδήσεις")
+          },
+        ]);
+        return;
       }
-      // Fallback: special prompt
-      await askAPI(
-        "Give me a concise daily digest of today’s top 4–5 news items strictly from the crawled articles of the last 48 hours. Provide one short paragraph."
-      );
-    } catch {
-      await askAPI(
-        "Give me a concise daily digest of today’s top 4–5 news items strictly from the crawled articles of the last 48 hours. Provide one short paragraph."
-      );
+      
+      const data = await response.json();
+      console.log("Digest received:", data.digest?.length, "characters");
+      
+      // Add ONLY the digest response - NO user message
+      setMessages((prev) => [
+        ...prev,
+        { 
+          role: "assistant", 
+          text: data.digest, 
+          onFav: () => addFavorite(data.digest) 
+        },
+      ]);
+      
+      console.log("Digest added successfully - PROCESS COMPLETE");
+      
+    } catch (error) {
+      console.error("Digest error:", error);
+      // Add error message
+      setMessages((prev) => [
+        ...prev,
+        { 
+          role: "assistant", 
+          text: "Σφάλμα στην ανάκτηση των ειδήσεων. Δοκίμασε αργότερα.",
+          onFav: () => addFavorite("Σφάλμα ανάκτησης ειδήσεων")
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
-  const fetchLatestNewsSum = async () => {
-    try {
-      const res = await fetch("/api/digest?n=5&hours=72");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const text = (data.digest || "").trim() || "No digest.";
-      setMessages((prev) => [...prev, { role: "assistant", text }]);
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${err.message}` }]);
-    }
-  };
-  
   return (
     <div className="container">
       {/* Header / Toolbar */}
@@ -216,8 +228,13 @@ function ChatApp() {
           <div className="title">Talk2News Chatbot</div>
         </div>
         <div className="topbar-actions">
-          <button className="btn-ghost" onClick={requestDigest} title="Daily Digest">🗞️ Latest News Sum</button>
-          <button className="btn-ghost" onClick={clearChat} title="Clear chat">🧹 Clear</button>
+          {/* ONLY ONE DIGEST BUTTON */}
+          <button className="btn-ghost" onClick={requestDigest} title="Daily Digest">
+            🗞️ Daily News Sum
+          </button>
+          <button className="btn-ghost" onClick={clearChat} title="Clear chat">
+            🧹 Clear
+          </button>
           <button className="btn-ghost" onClick={toggleTheme} title="Dark / Light">
             {theme === "dark" ? "🌙 Dark" : "☀️ Light"}
           </button>
@@ -248,7 +265,6 @@ function ChatApp() {
       </div>
     </div>
   );
- 
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<ChatApp />);

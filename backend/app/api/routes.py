@@ -9,23 +9,20 @@ import re
 import random
 from urllib.parse import urlparse
 from ..chatbot.vectorstore import reload_vectorstore, get_vectorstore_info 
-from ..chatbot.rag import generate_contextual_answer  # παραμένει για /ask
+from ..chatbot.rag import generate_contextual_answer  
 from ..chatbot.vectorstore import load_vectorstore
 from ..chatbot.llm import load_llm, generate_answer
-
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# ---------------------------
 # Public root
-# ---------------------------
+
 @router.get("/")
 async def read_root():
     return {"message": "Talk2News Chatbot API is up and running!"}
 
-# ---------------------------
-# Ask (ίδιο όπως πριν)
-# ---------------------------
+# Ask 
+
 class Question(BaseModel):
     question: str
     category: str | None = None
@@ -39,11 +36,8 @@ async def ask_question(question: Question):
     answer = generate_contextual_answer(question.question, question.category)
     return {"answer": answer}
 
-# -------------------------------------------------------
-# Weekly Digest (νέα υλοποίηση, χωρίς να αλλάξει το /ask)
-# -------------------------------------------------------
+# Weekly Sum 
 
-# Απλό φίλτρο να μη γεμίζουμε με καθαρά local ελληνικά
 WORLD_NEGATIVE_HINTS = [
     "ελλάδα", "αθήνα", "ελλην", "κυβέρνηση της ελλάδας", "παναθηναϊκ", "ολυμπιακ", "αεκ",
     "greece", "greek", "athens"
@@ -133,10 +127,10 @@ def _dedup_and_diversify(pool: List[Tuple[datetime, dict, str]],
     if not pool:
         return []
 
-    # 1) νεότερα πρώτα
+    # νεότερα πρώτα
     pool.sort(key=lambda x: x[0], reverse=True)
 
-    # 2) dedup
+    # dedup
     seen_keys = set()
     deduped: List[Tuple[datetime, dict, str]] = []
     for pub, meta, txt in pool:
@@ -154,7 +148,7 @@ def _dedup_and_diversify(pool: List[Tuple[datetime, dict, str]],
     if not deduped:
         return []
 
-    # 3) diversity per domain
+    # diversity per domain
     per_domain_count = {}
     picked: List[Tuple[dict, str]] = []
     for _pub, meta, txt in deduped:
@@ -169,14 +163,49 @@ def _dedup_and_diversify(pool: List[Tuple[datetime, dict, str]],
 
     return picked
 
+def _get_source_from_link(link: str) -> str:
+    """
+    Εξάγει πηγή από URL (ίδια με αυτή στο rag.py)
+    """
+    if not link:
+        return "Unknown Source"
+    
+    link_lower = link.lower()
+    
+    # Domain mapping
+    domain_mapping = {
+        "theverge.com": "The Verge",
+        "techradar.com": "TechRadar", 
+        "apnews.com": "Associated Press",
+        "newsbeast.gr": "Newsbeast",
+        "naftemporiki.gr": "Naftemporiki",
+        "theguardian.com": "The Guardian",
+        "guardian.com": "The Guardian",
+        "techcrunch.com": "TechCrunch",
+        "skai.gr": "SKAI",
+        "in.gr": "In.gr",
+        "tovima.gr": "To Vima",
+        "documentonews.gr": "Documento",
+        "greekreporter.com": "Greek Reporter",
+        "abcnews.go.com": "ABC News",
+        "npr.org": "NPR News",
+        "tanea.gr": "TaNea",
+        "eleftherostypos.gr": "Eleftheros Typos"
+    }
+    
+    for domain, source_name in domain_mapping.items():
+        if domain in link_lower:
+            return source_name
+    
+    return "Various Sources"
+
 def _build_weekly_digest_prompt(items: List[Tuple[dict, str]], lang: str = "en") -> str:
     """
-    Φτιάχνει prompt για 1 παράγραφο, 5–7 προτάσεις.
-    Δεν επιτρέπει bullets. Κλείνει με 1 φράση-γέφυρα.
+     prompt για daily digest - εστίαση σε σημαντικά νέα
     """
     def _brief(txt: str) -> str:
         t = (txt or "").replace("\n", " ").strip()
-        return (t[:260] + "…") if len(t) > 260 else t
+        return (t[:200] + "…") if len(t) > 200 else t
 
     lines = []
     for meta, txt in items:
@@ -184,7 +213,9 @@ def _build_weekly_digest_prompt(items: List[Tuple[dict, str]], lang: str = "en")
         link = meta.get("link", "")
         pub = _to_utc(meta.get("published_date"))
         pub_iso = pub.isoformat() if pub else ""
-        lines.append(f"- {title} ({pub_iso}) — {_brief(txt)} [source: {link}]")
+        source = _get_source_from_link(link)
+        
+        lines.append(f"- {title} ({pub_iso}) — {_brief(txt)} [source: {source}]")
 
     joined = "\n".join(lines)
     n = len(items)
@@ -192,22 +223,36 @@ def _build_weekly_digest_prompt(items: List[Tuple[dict, str]], lang: str = "en")
     if lang == "el":
         return f"""
 [ΣΥΣΤΗΜΑ]
-Σύνοψισε τις παρακάτω ειδήσεις των τελευταίων 7 ημερών σε ΕΝΑΝ συνοπτικό, ουδέτερο παράγραφο με 5–7 προτάσεις.
-ΜΗΝ εφευρίσκεις στοιχεία· χρησιμοποίησε μόνο όσα δίνονται. Χωρίς bullets/λίστες στον τελικό λόγο.
-Κλείσε με μια σύντομη φράση που συνδέει τα θέματα.
+Δημιούργησε μια σύντομη ενημερωτική σύνοψη των κορυφαίων ειδήσεων των τελευταίων 48 ωρών.
+
+ΚΑΝΟΝΕΣ:
+- Επίλεξε τα 5-6 πιο ΣΗΜΑΝΤΙΚΑ νέα (πολιτικά, οικονομικά, διεθνή, τεχνολογία)
+- Αγνόησε μικρές ή ασήμαντες ειδήσεις
+- Δώσε προτεραιότητα σε πρόσφατα γεγονότα με ευρεία επίδραση
+- Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες από τα παρεχόμενα άρθρα
+- Γράψε ΕΝΑν συνεκτικό παράγραφο 4-6 προτάσεων
 
 [ΕΙΔΗΣΕΙΣ ({n})]
 {joined}
+
+Σύνοψη κορυφαίων ειδήσεων:
 """.strip()
 
     return f"""
 [SYSTEM]
-Summarize the following last-7-days world news into ONE concise, neutral paragraph of 5–7 sentences.
-Do not invent facts. Use only what is provided. No lists/bullets in the final answer.
-End with one short connective sentence tying the themes together.
+Create a concise daily digest of the top news items from the last 48 hours.
 
-[NEWS ({n})]
+RULES:
+- Select the 5-6 most IMPORTANT news (politics, economy, international, technology)  
+- Ignore minor or trivial news stories
+- Prioritize recent events with broad impact
+- Use ONLY information from the provided articles
+- Write ONE coherent paragraph of 4-6 sentences
+
+[NEWS ITEMS ({n})]
 {joined}
+
+Daily news digest:
 """.strip()
 
 def build_weekly_digest_answer(max_items: int = 6, hours: int = 7 * 24, lang: str = "en") -> str:
@@ -218,41 +263,42 @@ def build_weekly_digest_answer(max_items: int = 6, hours: int = 7 * 24, lang: st
     if not vs:
         return "Vector index is not available right now."
 
-    # 1) Πάρε μεγάλο pool από πολλές κατηγορίες
+    #  Πάρε μεγάλο pool από πολλές κατηγορίες
     pool = _multiquery_pool(vs, window_hours=hours)
     if not pool:
         return "No sufficiently recent world news found in the selected window."
 
-    # 2) Time-seeded shuffle για ποικιλία (αλλά σταθερότητα μέσα στην ημέρα)
+    # Time-seeded shuffle για ποικιλία (αλλά σταθερότητα μέσα στην ημέρα)
     day_seed = int(datetime.utcnow().strftime("%Y%m%d"))
     random.seed(day_seed)
     random.shuffle(pool)
 
-    # 3) Dedup + diversity
+    #  Dedup + diversity
     items = _dedup_and_diversify(pool, max_items=max_items, per_domain_limit=2)
     if not items:
         return "No sufficiently diverse world news found."
 
-    # 4) Prompt & LLM
+    # Prompt & LLM
     prompt = _build_weekly_digest_prompt(items, lang=lang)
     llm = load_llm()
     answer = generate_answer(llm, prompt).strip()
     return answer or "No digest available right now."
 
-# -------------------------------------------------------
-# Weekly digest endpoint
-# -------------------------------------------------------
+
 @router.get("/digest")
-def weekly_digest(n: int = 6, hours: int = 7 * 24, lang: str = "en"):
+def weekly_digest(n: int = 6, hours: int = 48, lang: str = "en"):
     """
-    Επιστρέφει εβδομαδιαίο digest (default: 7 ημέρες) ως 1 παράγραφο.
-    - n: στόχος items για σύνοψη (5–7 προτείνεται· default 6)
-    - hours: παράθυρο σε ώρες (default 7*24)
-    - lang: "en" ή "el"
+    Επιστρέφει daily digest των τελευταίων ωρών
     """
-    n = max(5, min(n, 7))  # 5–7 προτάσεις/θέματα κρατάει καλύτερη ποιότητα
+    n = max(5, min(n, 7))
     lang = "el" if re.search(r"[Α-Ωα-ω]", lang or "") else "en"
+    
+    print(f" DIGEST ENDPOINT CALLED: n={n}, hours={hours}, lang={lang}")
+    
     digest = build_weekly_digest_answer(max_items=n, hours=hours, lang=lang)
+    
+    print(f" DIGEST GENERATED: {len(digest)} characters")
+    
     return {"digest": digest}
 
 @router.post("/reload-vectorstore")

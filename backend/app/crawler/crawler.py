@@ -6,11 +6,11 @@ from typing import Dict, Any, Iterable, List
 from pymongo import MongoClient, ASCENDING, errors
 from pymongo.errors import OperationFailure
 from ..utils_text import clean_html, normalize_published_date
-# --------- Logging setup ---------
+# Logging setup 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --------- RSS feeds ---------
+# RSS feeds 
 FEEDS: Dict[str, str] = {
     "Newsbeast": "https://www.newsbeast.gr/feed",
     "Naftemporiki": "https://www.naftemporiki.gr/feed/rss",
@@ -30,7 +30,7 @@ FEEDS: Dict[str, str] = {
     "TechRadar": "https://www.techradar.com/rss",
 }
 
-# --------- Θεματικές Κατηγορίες (απλή keyword προσέγγιση) ---------
+# Θεματικές Κατηγορίες (απλή keyword προσέγγιση) 
 CATEGORIES: Dict[str, Iterable[str]] = {
     "Politics": ["government", "election", "minister", "policy", "βουλή", "πολιτική"],
     "Economy": ["inflation", "market", "stock", "επενδύσεις", "οικονομία", "τράπεζα"],
@@ -40,7 +40,7 @@ CATEGORIES: Dict[str, Iterable[str]] = {
     "Sports": ["match", "team", "goal", "league", "πρωτάθλημα", "ομάδα", "ποδόσφαιρο"],
 }
 
-# --------- MongoDB setup ---------
+# MongoDB setup 
 MONGO_URL = "mongodb://172.25.240.1:27017/"
 DB_NAME = "news_database"
 COLL_NAME = "articles"
@@ -58,7 +58,7 @@ except errors.PyMongoError as e:
     logger.warning(f"Index creation warning: {e}")
 
 
-# --------- Helpers ---------
+# Helpers
 def classify_category(text: str) -> str:
     t = (text or "").lower()
     for category, keywords in CATEGORIES.items():
@@ -94,25 +94,25 @@ def _pick_entry_date_iso(entry) -> str:
     return normalize_published_date(datetime.now(timezone.utc))
 
 
-# --------- Core crawling ---------
-def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> int:  # 🚨 ΑΛΛΑΓΗ: -> int αντί για -> None
+# Core crawling 
+def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> int: 
     """
     Διατρέχει όλα τα FEEDS, καθαρίζει περιεχόμενο/ημερομηνίες και
     εισάγει/ενημερώνει άρθρα στη Mongo με dedup (link/hash).
     
-    Επιστρέφει: αριθμός νέων/ενημερωμένων άρθρων  # 🚨 ΠΡΟΣΘΗΚΗ
+    Επιστρέφει: αριθμός νέων/ενημερωμένων άρθρων 
     """
     logger.info(" Ξεκίνησε το crawling ειδήσεων...")
     new_articles: List[Dict[str, Any]] = []
     inserted = updated = skipped = 0
 
     for source_name, feed_url in FEEDS.items():
-        logger.info(f"📡 Crawling {source_name} ...")
+        logger.info(f"Crawling {source_name} ...")
         try:
             feed = feedparser.parse(feed_url)
             entries = getattr(feed, "entries", []) or []
             if not entries:
-                logger.warning(f"⚠️ Κενό feed: {source_name}")
+                logger.warning(f"Κενό feed: {source_name}")
                 continue
 
             for entry in entries[:limit_per_feed]:
@@ -161,22 +161,22 @@ def crawl(limit_per_feed: int = 15, min_content_len: int = 400) -> int:  # 🚨 
                     else:
                         skipped += 1
                 except errors.PyMongoError as e:
-                    logger.error(f"❌ Mongo error ({source_name}): {e}")
+                    logger.error(f"Mongo error ({source_name}): {e}")
                     skipped += 1
 
-            logger.info(f"✅ {source_name}: inserted={inserted}, updated={updated}, skipped={skipped}")
+            logger.info(f" {source_name}: inserted={inserted}, updated={updated}, skipped={skipped}")
 
         except Exception as e:
-            logger.error(f"❌ Σφάλμα κατά το crawling του {source_name}: {e}")
+            logger.error(f"Σφάλμα κατά το crawling του {source_name}: {e}")
 
     total = inserted + updated
     if total:
         logger.info(f"Ολοκληρώθηκε το crawling! Νέα/ενημερωμένα άρθρα: {total} (inserted={inserted}, updated={updated}).")
     else:
-        logger.warning("⚠️ Δεν βρέθηκαν νέα/ενημερωμένα άρθρα.")
+        logger.warning("Δεν βρέθηκαν νέα/ενημερωμένα άρθρα.")
     
-    return total  # 🚨 ΠΡΟΣΘΗΚΗ: Επιστροφή του total
+    return total  
 
-# --------- Optional CLI entrypoint ---------
+# Optional CLI entrypoint 
 if __name__ == "__main__":
     crawl()

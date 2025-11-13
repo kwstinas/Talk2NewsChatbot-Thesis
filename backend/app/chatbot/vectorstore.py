@@ -52,7 +52,7 @@ def _force_reload_vectorstore():
     global _vectorstore_cache, _last_reload_time
     _vectorstore_cache = None
     _last_reload_time = None
-    logger.info("🔄 Vectorstore reload scheduled for next request")
+    logger.info("Vectorstore reload scheduled for next request")
 
 def load_vectorstore(force_reload: bool = False):
     """
@@ -63,7 +63,7 @@ def load_vectorstore(force_reload: bool = False):
     # Έλεγχος αν χρειάζεται reload
     if force_reload or _should_reload_vectorstore():
         _vectorstore_cache = None
-        logger.info("🔄 Auto-reloading vectorstore...")
+        logger.info("Auto-reloading vectorstore...")
     
     if _vectorstore_cache is not None:
         return _vectorstore_cache
@@ -83,11 +83,11 @@ def load_vectorstore(force_reload: bool = False):
             built_model = meta.get("embedding_model")
             if built_model and built_model != EMBEDDING_MODEL:
                 logger.warning(
-                    f"⚠️ Το FAISS χτίστηκε με '{built_model}', αλλά τώρα ζητάς '{EMBEDDING_MODEL}'. "
+                    f" Το FAISS χτίστηκε με '{built_model}', αλλά τώρα ζητάς '{EMBEDDING_MODEL}'. "
                     f"Προτείνεται rebuild του index (τρέξε το build_vectorstore)."
                 )
         except Exception as e:
-            logger.warning(f"⚠️ Αδυναμία ανάγνωσης meta.json: {e}")
+            logger.warning(f" Αδυναμία ανάγνωσης meta.json: {e}")
 
     try:
         logger.info(f"Φόρτωση του FAISS vectorstore από το {SAVE_PATH}.")
@@ -97,7 +97,7 @@ def load_vectorstore(force_reload: bool = False):
         
         # Πληροφορίες για το νέο vectorstore
         doc_count = len(vs.docstore._dict)
-        logger.info(f"✅ Το vectorstore φορτώθηκε επιτυχώς! ({doc_count} documents)")
+        logger.info(f" Το vectorstore φορτώθηκε επιτυχώς! ({doc_count} documents)")
         return vs
     except Exception as e:
         logger.error(f"Σφάλμα κατά τη φόρτωση του vectorstore: {e}")
@@ -130,16 +130,16 @@ def similarity_search(query: str, k: int = 5):
         logging.warning("similarity_search: άδειο ή πολύ μικρό query μετά τον καθαρισμό.")
         return []
 
-    # Προληπτικό κόψιμο υπερβολικά μεγάλων queries (πχ paste dump)
+    # Προληπτικό κόψιμο υπερβολικά μεγάλων queries 
     if len(query_clean) > 512:
         query_clean = query_clean[:512]
 
-    logger.info("🔍 Εκτελείται similarity search για query='%s'...", query_clean[:60])
+    logger.info("Εκτελείται similarity search για query='%s'...", query_clean[:60])
 
     try:
         return vs.similarity_search_with_score(query_clean, k=k)
     except Exception:
-        # Δείξε πλήρες traceback για να βρούμε ρίζα (αντί για κενό μήνυμα)
+        # Δείξε πλήρες traceback για να βρούμε ρίζα 
         logger.exception("Σφάλμα στο similarity search")
         return []
 
