@@ -10,7 +10,7 @@ from pymongo import MongoClient
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-MONGO_URL = "mongodb://172.25.240.1:27017/"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://172.25.240.1:27017/")
 DATABASE_NAME = "news_database"
 COLLECTION_NAME = "articles"
 SAVE_PATH = "faiss_index"

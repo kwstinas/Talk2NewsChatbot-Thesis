@@ -7,6 +7,7 @@ from dateutil import parser as dtparser
 import logging
 import re
 import random
+from ..utils_text import get_source_from_link
 from urllib.parse import urlparse
 from ..chatbot.vectorstore import reload_vectorstore, get_vectorstore_info 
 from ..chatbot.rag import generate_contextual_answer  
@@ -37,7 +38,6 @@ async def ask_question(question: Question):
     return {"answer": answer}
 
 # Weekly Sum 
-
 WORLD_NEGATIVE_HINTS = [
     "ελλάδα", "αθήνα", "ελλην", "κυβέρνηση της ελλάδας", "παναθηναϊκ", "ολυμπιακ", "αεκ",
     "greece", "greek", "athens"
@@ -110,8 +110,8 @@ def _multiquery_pool(vs, window_hours: int) -> List[Tuple[datetime, dict, str]]:
             txt = (doc.page_content or "").strip()
             if not txt:
                 continue
-            if not _is_world_article(meta, txt):
-                continue
+            #if not _is_world_article(meta, txt):
+                #continue
             pool.append((pub, meta, txt))
 
     return pool
@@ -163,42 +163,6 @@ def _dedup_and_diversify(pool: List[Tuple[datetime, dict, str]],
 
     return picked
 
-def _get_source_from_link(link: str) -> str:
-    """
-    Εξάγει πηγή από URL (ίδια με αυτή στο rag.py)
-    """
-    if not link:
-        return "Unknown Source"
-    
-    link_lower = link.lower()
-    
-    # Domain mapping
-    domain_mapping = {
-        "theverge.com": "The Verge",
-        "techradar.com": "TechRadar", 
-        "apnews.com": "Associated Press",
-        "newsbeast.gr": "Newsbeast",
-        "naftemporiki.gr": "Naftemporiki",
-        "theguardian.com": "The Guardian",
-        "guardian.com": "The Guardian",
-        "techcrunch.com": "TechCrunch",
-        "skai.gr": "SKAI",
-        "in.gr": "In.gr",
-        "tovima.gr": "To Vima",
-        "documentonews.gr": "Documento",
-        "greekreporter.com": "Greek Reporter",
-        "abcnews.go.com": "ABC News",
-        "npr.org": "NPR News",
-        "tanea.gr": "TaNea",
-        "eleftherostypos.gr": "Eleftheros Typos"
-    }
-    
-    for domain, source_name in domain_mapping.items():
-        if domain in link_lower:
-            return source_name
-    
-    return "Various Sources"
-
 def _build_weekly_digest_prompt(items: List[Tuple[dict, str]], lang: str = "en") -> str:
     """
      prompt για daily digest - εστίαση σε σημαντικά νέα
@@ -213,7 +177,7 @@ def _build_weekly_digest_prompt(items: List[Tuple[dict, str]], lang: str = "en")
         link = meta.get("link", "")
         pub = _to_utc(meta.get("published_date"))
         pub_iso = pub.isoformat() if pub else ""
-        source = _get_source_from_link(link)
+        source = get_source_from_link(link)
         
         lines.append(f"- {title} ({pub_iso}) — {_brief(txt)} [source: {source}]")
 
@@ -269,8 +233,7 @@ def build_weekly_digest_answer(max_items: int = 6, hours: int = 7 * 24, lang: st
         return "No sufficiently recent world news found in the selected window."
 
     # Time-seeded shuffle για ποικιλία (αλλά σταθερότητα μέσα στην ημέρα)
-    day_seed = int(datetime.utcnow().strftime("%Y%m%d"))
-    random.seed(day_seed)
+    # Random shuffle για ποικιλία σε κάθε κλήση
     random.shuffle(pool)
 
     #  Dedup + diversity

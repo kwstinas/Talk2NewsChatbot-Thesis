@@ -1,6 +1,7 @@
 import feedparser
 import hashlib
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Dict, Any, Iterable, List
 from pymongo import MongoClient, ASCENDING, errors
@@ -41,7 +42,7 @@ CATEGORIES: Dict[str, Iterable[str]] = {
 }
 
 # MongoDB setup 
-MONGO_URL = "mongodb://172.25.240.1:27017/"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://172.25.240.1:27017/")
 DB_NAME = "news_database"
 COLL_NAME = "articles"
 

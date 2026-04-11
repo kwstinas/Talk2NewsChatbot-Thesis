@@ -2,11 +2,10 @@
 from datetime import datetime, timedelta, timezone
 from dateutil import parser
 import logging
+logger = logging.getLogger(__name__)
 import math
 import re
-import re as _re
 import os
-import re as _re_tok
 from time import perf_counter
 from dotenv import load_dotenv
 from .vectorstore import load_vectorstore, similarity_search  
@@ -15,8 +14,9 @@ from rank_bm25 import BM25Okapi
 import regex as re2
 import numpy as np
 from langchain_huggingface import HuggingFaceEmbeddings
+from ..utils_text import get_source_from_link
 
-# Φόρτωση .env (ώστε τα flags να διαβάζονται σωστά)
+# Φόρτωση .env
 load_dotenv()
 
 # Feature flags & ρυθμίσεις
@@ -30,9 +30,7 @@ CROSS_ENCODER_ENABLED = os.getenv("CROSS_ENCODER_ENABLED", "false").lower() == "
 CROSS_ENCODER_MODEL   = os.getenv("CROSS_ENCODER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 class ConversationManager:
-    """
-    Διαχειρίζεται το conversation context για follow-up ερωτήσεις
-    """
+   
     def __init__(self):
         self.conversation_context = {}
     
@@ -223,7 +221,7 @@ def _get_article_source(doc) -> str:
     
     # : link analysis
     link = metadata.get("link", "")
-    domain_source = _get_source_from_link(link)
+    domain_source = get_source_from_link(link)
     if domain_source:
         print(f" Using link analysis: {domain_source}")
         return domain_source
@@ -272,92 +270,6 @@ def _get_source_from_link(link: str) -> str:
             return source_name
     
     return ""
-
-def _are_titles_similar(title1: str, title2: str) -> bool:
-    """
-    Έλεγχος ομοιότητας τίτλων χωρίς
-    """
-    if not title1 or not title2:
-        return False
-    
-    # Αφαίρεση κοινών stop words
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-    words1 = {word for word in title1.split() if word not in stop_words and len(word) > 3}
-    words2 = {word for word in title2.split() if word not in stop_words and len(word) > 3}
-    
-    if not words1 or not words2:
-        return False
-    
-    # Έλεγχος για common words
-    common_words = words1 & words2
-    if len(common_words) >= 2:  # τουλάχιστον 2 κοινές λέξεις
-        return True
-    
-    # Έλεγχος string containment
-    if title1 in title2 or title2 in title1:
-        return True
-    
-    return False
-
-def _normalize_title(title: str) -> str:
-    """
-    Κανονικοποίηση τίτλου για deduplication
-    """
-    if not title:
-        return ""
-    
-    # Μετατροπή σε lowercase και αφαίρεση punctuation
-    title = title.lower().strip()
-    title = re.sub(r'[^\w\s]', ' ', title)
-    
-    # Αφαίρεση stop words και μικρών λέξεων
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
-    words = [word for word in title.split() if word not in stop_words and len(word) > 3]
-    
-    # Ταξινόμηση και επιστροφή μοναδικών λέξεων
-    return ' '.join(sorted(set(words)))
-
-def _titles_are_similar(title1: str, title2: str, similarity_threshold: float = 0.7) -> bool:
-    """
-    Έλεγχος ομοιότητας τίτλων με fuzzy matching
-    """
-    if not title1 or not title2:
-        return False
-        
-    from fuzzywuzzy import fuzz
-    
-    # Ratio similarity
-    similarity = fuzz.ratio(title1, title2) / 100.0
-    
-    # Partial ratio για μερική ομοιότητα
-    partial_similarity = fuzz.partial_ratio(title1, title2) / 100.0
-    
-    # Token set ratio για ανεξαρτησία σειράς
-    token_similarity = fuzz.token_set_ratio(title1, title2) / 100.0
-    
-    # Επιστροφή του μέγιστου similarity score
-    max_similarity = max(similarity, partial_similarity, token_similarity)
-    
-    return max_similarity > similarity_threshold
-
-def _calculate_recency_bonus(age_days: int) -> float:
-    """
-    Υπολογίζει recency bonus με πιο aggressive weights για πρόσφατα άρθρα
-    """
-    if age_days <= 0.5:    # 12 ώρες
-        return 0.4
-    elif age_days <= 1:    # 1 ημέρα
-        return 0.3
-    elif age_days <= 2:    # 2 ημέρες
-        return 0.2
-    elif age_days <= 3:    # 3 ημέρες
-        return 0.15
-    elif age_days <= 7:    # 1 εβδομάδα
-        return 0.1
-    elif age_days <= 14:   # 2 εβδομάδες
-        return 0.05
-    else:
-        return 0.0
 
 def generate_multi_article_answer(user_query: str, articles: list):
     """
@@ -624,62 +536,6 @@ def handle_followup_question(session_id: str, followup_question: str, original_q
         return answer
     
     return _create_fallback_answer(followup_question)
-
-def _find_relevant_articles_for_followup(followup_question: str, original_query: str = "", context=None):
-    """
-    Find and answer from relevant articles when same article is insufficient
-    """
-    print(f" SEARCHING RELEVANT ARTICLES for: '{followup_question}' (original: '{original_query}')")
-    
-    # Search query combining follow-up and original context
-    search_query = f"{followup_question} {original_query}"
-    
-    # Search for relevant articles
-    hits_with_raw = similarity_search(search_query, k=15)
-    
-    if not hits_with_raw:
-        return _create_fallback_answer(followup_question)
-    
-    # Multi-article για follow-ups
-    selected_articles = select_multiple_articles(hits_with_raw, followup_question, max_articles=3, max_age_days=30)
-    
-    if len(selected_articles) >= 1:  # Χρησιμοποίησε multi-article ακόμα και με 1 άρθρο
-        print(f"ATTEMPTING MULTI-ARTICLE for follow-up with {len(selected_articles)} articles")
-        multi_answer = generate_multi_article_answer(followup_question, selected_articles)
-        
-        if multi_answer and _is_meaningful_answer(multi_answer):
-            print("Using multi-article for follow-up")
-            # Update context with the first new article for future follow-ups
-            if selected_articles:
-                conversation_manager.store_article_context(
-                    "default",  # or use session_id
-                    selected_articles[0],
-                    followup_question,
-                    multi_answer
-                )
-            return multi_answer
-    
-    # 🆕 FALLBACK: Single article approach
-    print("Fallback to single article for follow-up")
-    selected_article = _select_best_followup_article(hits_with_raw, followup_question, original_query)
-    
-    if not selected_article:
-        return _create_fallback_answer(followup_question)
-    
-    # Generate answer from the new article
-    lang = _detect_lang(followup_question)
-    answer = _generate_answer_from_article(selected_article, followup_question, lang)
-    
-    # Update context with the new article for future follow-ups
-    if context and selected_article:
-        conversation_manager.store_article_context(
-            "default",  # or use session_id
-            selected_article,
-            followup_question,
-            answer
-        )
-    
-    return answer
 
 def _try_answer_from_same_article(context, followup_question: str, original_query: str = ""):
     """
@@ -1042,7 +898,7 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
     original_query = user_query
     if _is_recency_query(user_query):
         user_query = query_with_recency(user_query)
-        print(f" RECENCY QUERY ENHANCED: '{original_query}' -> '{user_query}'")
+        logger.info(f"RECENCY QUERY ENHANCED: '{original_query}' -> '{user_query}'")
 
     # Force multi-article για broad queries
     if _is_broad_topic_query(original_query):
@@ -1065,8 +921,8 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
     context = conversation_manager.get_article_context(session_id)
     if context and _is_completely_new_topic(user_query, context.get('original_query', '')):
         print(" COMPLETELY NEW TOPIC DETECTED - Clearing previous context")
-    conversation_manager.clear_context(session_id)
-    context = None  # Clear the context variable too
+        conversation_manager.clear_context(session_id)
+        context = None  # Clear the context variable too
 
     # Ελάχιστος έλεγχος ποιότητας ερώτησης
     if not user_query or len(user_query) < 3:
@@ -1187,7 +1043,7 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
         
         # Χρησιμοποίησε multi-article αν είναι meaningful
         if multi_article_answer and _is_meaningful_answer(multi_article_answer):
-            print("USING MULTI-ARTICLE ANSWER")
+            logger.info("USING MULTI-ARTICLE ANSWER")
             # Αποθήκευση context από το πρώτο άρθρο για follow-up questions
             if selected_articles:
                 conversation_manager.store_article_context(session_id, selected_articles[0], user_query, multi_article_answer)
@@ -1195,7 +1051,7 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
             return multi_article_answer
         
         # FALLBACK: Single article (μόνο αν multi-article απέτυχε)
-        print(" FALLBACK TO SINGLE ARTICLE")
+        logger.info("FALLBACK TO SINGLE ARTICLE")
         chosen, topic_match = _select_single_article(
             hits_with_raw,
             query_kws=query_kws,
@@ -1211,7 +1067,7 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
                 query_kws=query_kws,
                 query=user_query,
                 hard_recency=False,
-                min_sim=0.04
+                min_sim=0.02
             )
         
         # last resort: αν ακόμα δεν υπάρχει, πάρε το πρώτο hit «ως έχει»
@@ -1264,13 +1120,11 @@ def generate_contextual_answer(user_query, category: str = None, session_id: str
             return _fallback_no_context(user_query)
 
         # Post-processing: αφαίρεση τυχόν labels
-        answer = _re.sub(r'(?im)^\s*(topic\s*match\s*:.*)$', '', answer).strip()
-        answer = _re.sub(
-            r'(?im)^\s*(title|date\s*\(utc\)|link|source|excerpt|άρθρο|τίτλος|ημερομηνία|σύνδεσμος|απόσπασμα)\s*:\s*.*$',
-            '',
-            answer
+        answer = re.sub(r'(?im)^\s*(topic\s*match\s*:.*)$', '', answer).strip()
+        answer = re.sub(r'(?im)^\s*(title|date\s*\(utc\)|link|source|excerpt|άρθρο|τίτλος|ημερομηνία|σύνδεσμος|απόσπασμα)\s*:\s*.*$','',
+        answer
         ).strip()
-        answer = _re.sub(r'\n{2,}', '\n', answer).strip()
+        answer = re.sub(r'\n{2,}', '\n', answer).strip()
 
         # Αποθήκευση context για follow-up questions
         conversation_manager.store_article_context(session_id, chosen, user_query, answer)
@@ -1296,7 +1150,8 @@ def query_with_recency(query: str) -> str:
     
     # Αν το query δεν έχει ήδη recency keywords, πρόσθεσε
     if not any(keyword in query_lower for keyword in recency_keywords):
-        return query + " latest recent 2025"
+        current_year = str(datetime.now().year)
+        return query + f" latest recent {current_year}"
     
     return query
 
@@ -1314,7 +1169,8 @@ def _is_recency_query(query: str) -> bool:
     return any(indicator in query_lower for indicator in recency_indicators)
 
 # πολύ απλή tokenization για en/el
-_punct_re = _re_tok.compile(r"[^\wΆ-ώ]+", _re_tok.UNICODE)
+_punct_re = re.compile(r"[^\wΆ-ώ]+", re.UNICODE)
+
 
 def _tok(text: str):
     t = (text or "").lower()
@@ -1995,7 +1851,8 @@ class QueryRouter:
         if analysis['intent'] == 'find_person':
             base_queries.extend([f"{query} news", f"{query} latest"])
         elif analysis['intent'] == 'get_latest':
-            base_queries.extend([f"{query} 2025", f"{query} today"])
+            current_year = str(datetime.now().year)
+            base_queries.extend([f"{query} {current_year}", f"{query} today"])
         elif analysis['type'] == 'followup' and context:
             if 'original_query' in context:
                 base_queries.append(f"{query} {context['original_query']}")

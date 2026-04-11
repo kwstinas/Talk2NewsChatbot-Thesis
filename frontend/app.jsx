@@ -44,10 +44,10 @@ function Footer({ onSend, loading }) {
   const handleSend = async () => {
     const v = value.trim();
     if (!v) return;
-    await onSend(v);
-    setValue("");               
+    setValue("");
     textareaRef.current?.focus();
-  };
+    await onSend(v);
+};
 
   const onKeyDown = (e) => {
     // Enter => send (Shift+Enter για newline)
