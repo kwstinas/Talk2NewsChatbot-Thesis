@@ -71,28 +71,6 @@ Talk2News combines automated news ingestion with a Retrieval-Augmented Generatio
 
 ---
 
-## Project Structure
-Talk2News-Chatbot/
-├── backend/
-│   └── app/
-│       ├── main.py                 # FastAPI entry point + scheduler
-│       ├── api/
-│       │   └── routes.py           # /api/ask and /api/digest endpoints
-│       ├── crawler/
-│       │   └── crawler.py          # RSS ingestion + MongoDB storage
-│       ├── chatbot/
-│       │   ├── build_vectorstore.py # FAISS index builder (full/incremental)
-│       │   ├── vectorstore.py      # Search + in-memory caching
-│       │   ├── rag.py              # RAG pipeline + advanced retrieval
-│       │   └── llm.py              # Llama 3.1 loader + inference
-│       └── utils_text.py           # Shared text utilities
-├── frontend/
-│   ├── index.html
-│   ├── app.jsx                     # React ChatApp component
-│   └── style.css                   # Theming + responsive layout
-└── README.md
----
-
 ## Installation
 
 ### Prerequisites
