@@ -1,0 +1,8 @@
+models/
+faiss_index/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.git/
+*.gguf

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: talk2news-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: talk2news-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./faiss_index:/app/faiss_index
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
