@@ -40,6 +40,7 @@ Talk2News combines automated news ingestion with a Retrieval-Augmented Generatio
 - MD5-based deduplication and MongoDB unique indexes prevent duplicate storage.
 - Incremental FAISS updates add new embeddings without rebuilding the entire index.
 - In-memory vectorstore with 30-minute auto-reload for near-real-time query responsiveness.
+- Full incremental sync runs daily at 03:00 for database consistency.
 
 ---
 ## Technology Stack
@@ -52,7 +53,7 @@ Talk2News combines automated news ingestion with a Retrieval-Augmented Generatio
 
 ### AI / ML
 - **Llama 3.1 8B Instruct** (GGUF Q5_K_M quantization) — Local LLM inference
-- **llama-cpp-python** — C++ bindings enabling CPU-only execution
+- **llama-cpp-python** — C++ bindings enabling CPU-only execution (~5GB RAM, ~3 tokens/sec)
 - **FAISS** — Dense vector similarity search
 - **sentence-transformers/all-mpnet-base-v2** — 768-dimensional embedding model
 - **rank_bm25** — Lexical re-ranking algorithm
@@ -69,47 +70,81 @@ Talk2News combines automated news ingestion with a Retrieval-Augmented Generatio
 - **CSS Variables** — Dynamic dark/light theming
 - **localStorage** — Client-side persistence for chat history and favorites
 
+### Deployment
+- **Docker** + **docker-compose** — Containerized deployment (MongoDB + App)
+- One-command startup with `docker-compose up`
+
 ---
 
 ## Installation
 
-### Prerequisites
+### Option 1: Docker (Recommended)
+
+```bash
+git clone https://github.com/kwstinas/Talk2NewsChatbot-Thesis.git
+cd Talk2NewsChatbot-Thesis
+```
+
+Download `Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf` from Hugging Face and place it in the `models/` directory.
+
+```bash
+docker-compose up --build
+```
+
+Navigate to `http://localhost:8000` in your browser.
+
+### Option 2: Manual Setup
+
+**Prerequisites:**
 - Python 3.11 or higher
 - MongoDB running locally or accessible via URL
 - At least 8 GB RAM (16 GB recommended)
 - ~6 GB free disk space for the Llama model
 
-### Setup
-
-1. **Clone the repository**
 ```bash
-   git clone https://github.com/kwstinas/Talk2NewsChatbot-Thesis.git
-   cd Talk2NewsChatbot-Thesis
+git clone https://github.com/kwstinas/Talk2NewsChatbot-Thesis.git
+cd Talk2NewsChatbot-Thesis
+pip install -r requirements.txt
 ```
 
-2. **Install Python dependencies**
+Download the Llama model and place it in `models/`.
+
+Configure MongoDB:
 ```bash
-   pip install -r requirements.txt
+export MONGO_URL="mongodb://localhost:27017/"
 ```
 
-3. **Download the Llama 3.1 model**
-   Due to size constraints, the model is not included. Download `Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf` from Hugging Face and place it in the `models/` directory.
-
-4. **Configure MongoDB**
-   Set the `MONGO_URL` environment variable (defaults to `mongodb://localhost:27017/`):
+Start the server:
 ```bash
-   export MONGO_URL="mongodb://localhost:27017/"
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-5. **Start the server**
-```bash
-   uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
-```
-
-6. **Open the frontend**
-   Navigate to `http://localhost:8000` in your browser.
+Navigate to `http://localhost:8000` in your browser.
 
 ---
+
+## Design Decisions
+
+**Why local-first?** Privacy, zero operational cost, and full control over the data pipeline. No user query or article content ever leaves the machine.
+
+**Why hybrid retrieval?** Pure semantic search misses exact keyword matches (e.g. person names), while pure lexical search misses conceptual relationships. Combining FAISS with BM25 captures both signals.
+
+**Why incremental FAISS updates?** Rebuilding a 358K+ chunk index on every crawl would be prohibitively expensive. Incremental merges keep the system responsive while the data grows continuously.
+
+**Why GGUF quantization?** The full Llama 3.1 8B model requires ~16 GB of RAM. Q5_K_M quantization reduces this to ~5 GB with minimal quality loss, enabling execution on consumer hardware without a GPU.
+
+**Why Docker?** Eliminates dependency headaches and ensures consistent deployment across different machines. One command to start everything.
+
+---
+
+## Known Limitations
+
+- General, open-ended queries ("what's happening today?") perform worse than targeted ones ("Trump tariffs on Europe") due to inherent ambiguity in semantic search.
+- CPU-only inference trades speed for accessibility: responses typically take 30–90 seconds depending on context length.
+- First inference after startup is slower while Llama loads into memory (~30 seconds).
+
+---
+
 ## Academic Context
 
 This project was developed as a Bachelor's thesis under the supervision of **Dr. Stavros Vologiannidis**, Professor, International Hellenic University, Department of Informatics, Computers and Telecommunications Engineering, Serres campus.
